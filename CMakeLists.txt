@@ -6,6 +6,20 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(Boost REQUIRED COMPONENTS system filesystem)
 find_package(LibtorrentRasterbar REQUIRED)
 
-add_executable(${PROJECT_NAME} test.cpp)
+# 包含 indicators 的头文件
+add_subdirectory(external/indicators)
+include_directories(external/indicators/include)
 
-target_link_libraries(${PROJECT_NAME} Boost::system Boost::filesystem LibtorrentRasterbar::torrent-rasterbar)
+# 设置默认构建类型为 Debug
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Debug)
+endif()
+
+# 添加调试标志
+set(CMAKE_CXX_FLAGS_DEBUG "-g -O0")
+set(CMAKE_C_FLAGS_DEBUG "-g -O0")
+
+file(GLOB_RECURSE SRC_FILES src/*.cpp src/*.c)
+add_executable(${PROJECT_NAME} ${SRC_FILES})
+
+target_link_libraries(${PROJECT_NAME} pthread Boost::system Boost::filesystem LibtorrentRasterbar::torrent-rasterbar)
