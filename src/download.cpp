@@ -1,4 +1,3 @@
-
 #include <chrono>
 #include <iostream>
 #include <thread>
@@ -33,6 +32,7 @@ inline int bitorrent_download(int argc, char *argv[]) {
   params.ti = ti;
   params.save_path = "./downloads"; // 下载保存路径
   auto handle = session.add_torrent(params);
+  std::cout << "Downloading to: " << params.save_path << "\n";
 
   // 设置进度条
   indicators::ProgressBar progress_bar{
@@ -47,29 +47,31 @@ inline int bitorrent_download(int argc, char *argv[]) {
       indicators::option::ShowRemainingTime{true},
       indicators::option::PostfixText{"Initializing..."}};
 
-  // 打印下载进度
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  // 持续更新下载状态
+  while (true) {
+    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-  auto status = handle.status();
+    // 获取种子状态
+    auto status = handle.status();
 
-  // 获取下载速率（字节/秒）
-  double download_rate_kbps = status.download_rate / 1024.0;
+    // 更新下载速率和进度
+    double download_rate_kbps = status.download_rate / 1024.0;
+    progress_bar.set_progress(status.progress * 100);
+    progress_bar.set_option(indicators::option::PostfixText{
+        "Downloading... " + std::to_string(int(status.progress * 100)) +
+        "% | Speed: " + std::to_string(download_rate_kbps) + " kB/s"});
 
-  // 更新进度条
-  progress_bar.set_progress(status.progress * 100);
-  progress_bar.set_option(indicators::option::PostfixText{
-      "Downloading... " + std::to_string(int(status.progress * 100)) +
-      "% | Speed: " + std::to_string(download_rate_kbps) + " kB/s"});
-
-  // 检查是否完成
-  if (status.is_finished) {
-    progress_bar.set_option(
-        indicators::option::ForegroundColor{indicators::Color::cyan});
-    progress_bar.set_option(
-        indicators::option::PostfixText{"Download complete!"});
-    progress_bar.mark_as_completed();
-    std::cout << "\nDownload complete!\n";
-    return 0;
+    // 检查是否完成
+    if (status.is_finished) {
+      progress_bar.set_option(
+          indicators::option::ForegroundColor{indicators::Color::cyan});
+      progress_bar.set_option(
+          indicators::option::PostfixText{"Download complete!"});
+      progress_bar.mark_as_completed();
+      std::cout << "\nDownload complete!\n";
+      break;
+    }
   }
+
   return 0;
 }
