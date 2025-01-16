@@ -6,5 +6,6 @@ int main(int argc, char *argv[]) {
     return 1;
   } else {
     async_bitorrent_download(argc, argv);
+    // bitorrent_download(argc, argv);
   }
 }
