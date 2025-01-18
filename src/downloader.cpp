@@ -1,17 +1,6 @@
-#include <chrono>
-#include <iostream>
-#include <libtorrent/add_torrent_params.hpp>
-#include <libtorrent/alert_types.hpp>
-#include <libtorrent/magnet_uri.hpp>
-#include <libtorrent/session.hpp>
-#include <libtorrent/session_params.hpp>
-#include <libtorrent/torrent_handle.hpp>
-#include <thread>
-#include <vector>
+#include "downloader.h"
 
-#include <indicators/progress_bar.hpp>
-
-inline void set_session(lt::session &session) {
+void torrent_downloader::set_session(lt::session &session) {
   lt::settings_pack settings;
   // 调整发送/接收缓冲区
   settings.set_int(lt::settings_pack::send_buffer_watermark, 1 * 1024 * 1024);
@@ -35,60 +24,30 @@ inline void set_session(lt::session &session) {
   session.apply_settings(settings);
 }
 
-inline void check_torrent(lt::add_torrent_alert *alert) {}
-
-inline int bitorrent_download(int argc, char *argv[]) {
-  if (argc != 2) {
-    std::cerr << "Usage: " << argv[0] << " <torrent-file>\n";
-    return 1;
-  }
-
-  // 创建 libtorrent 会话
+int torrent_downloader::bitorrent_download() {
   lt::session session;
   set_session(session);
 
-  // 加载 .torrent 文件
-  auto ti = std::make_shared<lt::torrent_info>(argv[1]);
+  auto ti = params.ti;
 
-  // 显示种子文件信息
   std::cout << "Torrent name: " << ti->name() << "\n";
   std::cout << "Number of files: " << ti->num_files() << "\n";
 
-  // 设置种子参数
   lt::add_torrent_params params;
-  params.ti = ti;
-  params.save_path = "./downloads"; // 下载保存路径
   auto handle = session.add_torrent(params);
   std::cout << "Downloading to: " << params.save_path << "\n";
 
-  // 设置进度条
-  indicators::ProgressBar progress_bar{
-      indicators::option::BarWidth{50},
-      indicators::option::Start{"["},
-      indicators::option::Fill{"="},
-      indicators::option::Lead{">"},
-      indicators::option::Remainder{" "},
-      indicators::option::End{"]"},
-      indicators::option::ForegroundColor{indicators::Color::green},
-      indicators::option::ShowElapsedTime{true},
-      indicators::option::ShowRemainingTime{true},
-      indicators::option::PostfixText{"Initializing..."}};
-
-  // 持续更新下载状态
   while (true) {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // 获取种子状态
     auto status = handle.status();
 
-    // 更新下载速率和进度
     double download_rate_kbps = status.download_rate / 1024.0;
     progress_bar.set_progress(status.progress * 100);
     progress_bar.set_option(indicators::option::PostfixText{
         "Downloading... " + std::to_string(int(status.progress * 100)) +
         "% | Speed: " + std::to_string(download_rate_kbps) + " kB/s"});
 
-    // 检查是否完成
     if (status.is_finished) {
       progress_bar.set_option(
           indicators::option::ForegroundColor{indicators::Color::cyan});
@@ -103,8 +62,7 @@ inline int bitorrent_download(int argc, char *argv[]) {
   return 0;
 }
 
-inline void check_torrent_helper(lt::session &session, lt::torrent_status &st,
-                                 indicators::ProgressBar &progress_bar) {
+void torrent_downloader::check_torrent_helper(lt::session &session) {
   bool torrent_finished = false; // 状态变量，标记是否完成
   while (!torrent_finished) {
     session.post_torrent_updates();
@@ -176,43 +134,20 @@ inline void check_torrent_helper(lt::session &session, lt::torrent_status &st,
   }
 }
 
-inline void check_torrent(lt::session &session) {
+void torrent_downloader::check_torrent(lt::session &session) {
   lt::torrent_status st;
-  indicators::ProgressBar progress_bar{
-      indicators::option::BarWidth{50},
-      indicators::option::Start{"["},
-      indicators::option::Fill{"="},
-      indicators::option::Lead{">"},
-      indicators::option::Remainder{" "},
-      indicators::option::End{"]"},
-      indicators::option::ForegroundColor{indicators::Color::cyan},
-      indicators::option::ShowElapsedTime{true},
-      indicators::option::ShowRemainingTime{true},
-      indicators::option::FontStyles{
-          std::vector<indicators::FontStyle>{indicators::FontStyle::bold}},
-  };
-  check_torrent_helper(session, st, progress_bar);
+  check_torrent_helper(session);
 }
 
-inline int async_bitorrent_download(int argv, char *argc[]) {
-  if (argv != 2) {
-    std::cerr << "Usage: " << argc[0] << " <torrent-file>\n";
-    return 1;
-  }
-
-  lt::session session;
-  lt::add_torrent_params params;
+void torrent_downloader::async_bitorrent_download() {
   // session.apply_settings(settings);
   // set_session(session);
-  auto ti = std::make_shared<lt::torrent_info>(argc[1]);
-
-  params.ti = ti;
-  params.save_path = "./downloads";
+  auto ti = params.ti;
 
   session.async_add_torrent(params);
   session.post_torrent_updates();
   std::cout << "Downloading to: " << params.save_path << "\n";
 
   check_torrent(session);
-  return 0;
+  return;
 }

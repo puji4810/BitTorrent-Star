@@ -12,52 +12,40 @@
 #include <indicators/progress_bar.hpp>
 
 struct torrent_downloader {
+  // std::vector<libtorrent::session> sessions;
   libtorrent::session session;
   libtorrent::torrent_handle handle;
   std::vector<libtorrent::alert *> alerts;
+  libtorrent::add_torrent_params params;
+  libtorrent::torrent_status st;
+  indicators::ProgressBar progress_bar;
 
-  torrent_downloader() {}
-
-  void download(const std::string &torrent_file) {
-    libtorrent::add_torrent_params params;
-    params.save_path = "./";
-    params.ti = std::make_shared<libtorrent::torrent_info>(torrent_file);
-    handle = session.add_torrent(params);
-  }
-
-  void download(const libtorrent::add_torrent_params &params) {
-    handle = session.add_torrent(params);
-  }
-
-  void download(const std::string &magnet_uri, const std::string &save_path) {
-    libtorrent::add_torrent_params params;
+  torrent_downloader(const std::string &torrent_file,
+                     const std::string &save_path = "./download")
+      : progress_bar(
+            indicators::option::BarWidth{50}, indicators::option::Start{"["},
+            indicators::option::Fill{"="}, indicators::option::Lead{">"},
+            indicators::option::Remainder{" "}, indicators::option::End{"]"},
+            indicators::option::ForegroundColor{indicators::Color::cyan},
+            indicators::option::ShowElapsedTime{true},
+            indicators::option::ShowRemainingTime{true},
+            indicators::option::FontStyles{std::vector<indicators::FontStyle>{
+                indicators::FontStyle::bold}}) {
     params.save_path = save_path;
-    libtorrent::error_code ec;
-    libtorrent::parse_magnet_uri(magnet_uri, params, ec);
-    handle = session.add_torrent(params);
+    params.ti = std::make_shared<libtorrent::torrent_info>(torrent_file);
   }
 
-  void download(const std::string &magnet_uri) { download(magnet_uri, "./"); }
-
-  void wait() {
-    while (true) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-      std::vector<libtorrent::alert *> new_alerts;
-      session.pop_alerts(&new_alerts);
-      alerts.insert(alerts.end(), new_alerts.begin(), new_alerts.end());
-      for (auto &alert : new_alerts) {
-        if (auto *e =
-                libtorrent::alert_cast<libtorrent::torrent_finished_alert>(
-                    alert)) {
-          return;
-        }
-      }
-    }
-  }
+  void wait() { check_torrent(session); }
 
   void print_alerts() {
     for (auto &alert : alerts) {
       std::cout << alert->message() << std::endl;
     }
   }
+
+  void set_session(lt::session &session);
+  void check_torrent_helper(lt::session &session);
+  void check_torrent(lt::session &session);
+  void async_bitorrent_download();
+  int bitorrent_download();
 };
