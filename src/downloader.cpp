@@ -24,45 +24,8 @@ void torrent_downloader::set_session(lt::session &session) {
   session.apply_settings(settings);
 }
 
-int torrent_downloader::bitorrent_download() {
-  lt::session session;
-  set_session(session);
-
-  auto ti = params.ti;
-
-  std::cout << "Torrent name: " << ti->name() << "\n";
-  std::cout << "Number of files: " << ti->num_files() << "\n";
-
-  lt::add_torrent_params params;
-  auto handle = session.add_torrent(params);
-  std::cout << "Downloading to: " << params.save_path << "\n";
-
-  while (true) {
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-
-    auto status = handle.status();
-
-    double download_rate_kbps = status.download_rate / 1024.0;
-    progress_bar.set_progress(status.progress * 100);
-    progress_bar.set_option(indicators::option::PostfixText{
-        "Downloading... " + std::to_string(int(status.progress * 100)) +
-        "% | Speed: " + std::to_string(download_rate_kbps) + " kB/s"});
-
-    if (status.is_finished) {
-      progress_bar.set_option(
-          indicators::option::ForegroundColor{indicators::Color::cyan});
-      progress_bar.set_option(
-          indicators::option::PostfixText{"Download complete!"});
-      progress_bar.mark_as_completed();
-      std::cout << "\nDownload complete!\n";
-      break;
-    }
-  }
-
-  return 0;
-}
-
-void torrent_downloader::check_torrent_helper(lt::session &session) {
+void torrent_downloader::check_torrent_helper(lt::session &session,
+                                              lt::torrent_status &st) {
   bool torrent_finished = false; // 状态变量，标记是否完成
   while (!torrent_finished) {
     session.post_torrent_updates();
@@ -134,20 +97,18 @@ void torrent_downloader::check_torrent_helper(lt::session &session) {
   }
 }
 
-void torrent_downloader::check_torrent(lt::session &session) {
-  lt::torrent_status st;
-  check_torrent_helper(session);
+void torrent_downloader::check_torrent() {
+  for (auto &task : tasks) {
+    check_torrent_helper(task.session, task.status);
+  }
 }
 
 void torrent_downloader::async_bitorrent_download() {
   // session.apply_settings(settings);
   // set_session(session);
-  auto ti = params.ti;
-
-  session.async_add_torrent(params);
-  session.post_torrent_updates();
-  std::cout << "Downloading to: " << params.save_path << "\n";
-
-  check_torrent(session);
+  for (auto &task : tasks) {
+    task.session.async_add_torrent(task.params);
+    task.session.post_torrent_updates();
+  }
   return;
 }
