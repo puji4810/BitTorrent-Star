@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.22)
 PROJECT(BitTorrent-Star)
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(Boost REQUIRED COMPONENTS system filesystem)
+find_package(Boost REQUIRED COMPONENTS program_options system filesystem)
 find_package(LibtorrentRasterbar REQUIRED)
 
 # 包含 indicators 的头文件
@@ -22,4 +22,4 @@ set(CMAKE_C_FLAGS_DEBUG "-g -O0")
 file(GLOB_RECURSE SRC_FILES src/*.cpp src/*.c)
 add_executable(${PROJECT_NAME} ${SRC_FILES})
 
-target_link_libraries(${PROJECT_NAME} pthread Boost::system Boost::filesystem LibtorrentRasterbar::torrent-rasterbar)
+target_link_libraries(${PROJECT_NAME} pthread Boost::program_options Boost::system Boost::filesystem LibtorrentRasterbar::torrent-rasterbar)

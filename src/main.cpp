@@ -1,13 +1,8 @@
 #include "downloader.h"
-
+#include "initer.h"
 int main(int argc, char *argv[]) {
-  if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " <torrent-file>\n";
-    return 1;
-  } else {
-    torrent_downloader td{argv[1], "./download"};
-    td.async_bitorrent_download();
-    td.wait();
-    // bitorrent_download(argc, argv);
-  }
+  initer initer(argc, argv);
+  torrent_downloader td(initer.file_paths, initer.save_path);
+  td.async_bitorrent_download();
+  td.wait();
 }

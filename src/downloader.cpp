@@ -25,13 +25,14 @@ void torrent_downloader::set_session(lt::session &session) {
 }
 
 void torrent_downloader::check_torrent_helper(lt::session &session,
-                                              lt::torrent_status &st) {
+                                              lt::torrent_status &st, indicators::ProgressBar &progress_bar)
+{
   bool torrent_finished = false; // 状态变量，标记是否完成
   while (!torrent_finished) {
     session.post_torrent_updates();
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    std::vector<lt::alert *> alerts;
+    // std::vector<lt::alert *> alerts;
     session.pop_alerts(&alerts);
 
     for (auto alert : alerts) {
@@ -55,6 +56,16 @@ void torrent_downloader::check_torrent_helper(lt::session &session,
         //     break;
         //   }
         // }
+
+      case lt::torrent_checked_alert::alert_type:
+      {
+        auto checked_alert = lt::alert_cast<lt::torrent_checked_alert>(alert);
+        if (checked_alert)
+        {
+          std::cout << "Torrent checked\n";
+        }
+        break;
+      }
 
       case lt::state_update_alert::alert_type: {
         auto update_alert = lt::alert_cast<lt::state_update_alert>(alert);
@@ -82,14 +93,6 @@ void torrent_downloader::check_torrent_helper(lt::session &session,
         break;
       }
 
-      case lt::torrent_checked_alert::alert_type: {
-        auto checked_alert = lt::alert_cast<lt::torrent_checked_alert>(alert);
-        if (checked_alert) {
-          std::cout << "Torrent checked\n";
-        }
-        break;
-      }
-
       default:
         break;
       }
@@ -99,7 +102,8 @@ void torrent_downloader::check_torrent_helper(lt::session &session,
 
 void torrent_downloader::check_torrent() {
   for (auto &task : tasks) {
-    check_torrent_helper(task.session, task.status);
+    std::cout << "torrent file: " << task.params.ti->name() << std::endl;
+    check_torrent_helper(task.session, task.status, *task.progress_bar);
   }
 }
 
