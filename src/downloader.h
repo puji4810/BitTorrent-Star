@@ -10,26 +10,22 @@
 #include <memory>
 #include <thread>
 #include <vector>
-struct task
-{
+struct task {
   libtorrent::session session;
   libtorrent::add_torrent_params params;
   libtorrent::torrent_status status;
   std::unique_ptr<indicators::ProgressBar> progress_bar;
 
-  task()
-  {
+  task() {
     progress_bar = std::make_unique<indicators::ProgressBar>(
-        indicators::option::BarWidth{50},
-        indicators::option::Start{"["},
-        indicators::option::Fill{"="},
-        indicators::option::Lead{">"},
-        indicators::option::Remainder{" "},
-        indicators::option::End{"]"},
+        indicators::option::BarWidth{50}, indicators::option::Start{"["},
+        indicators::option::Fill{"="}, indicators::option::Lead{">"},
+        indicators::option::Remainder{" "}, indicators::option::End{"]"},
         indicators::option::ForegroundColor{indicators::Color::cyan},
         indicators::option::ShowElapsedTime{true},
         indicators::option::ShowRemainingTime{true},
-        indicators::option::FontStyles{std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
+        indicators::option::FontStyles{
+            std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
   }
   task(const task &) = delete;            // 禁用拷贝构造函数
   task(task &&) = default;                // 启用移动构造函数
@@ -38,8 +34,7 @@ struct task
   ~task() = default;
 };
 
-struct torrent_downloader
-{
+struct torrent_downloader {
 public:
   std::vector<task> tasks;
   // libtorrent::session session;
@@ -48,8 +43,7 @@ public:
   // indicators::ProgressBar progress_bar;
 
   torrent_downloader(const std::string &torrent_file,
-                     const std::string &save_path = "./download")
-  {
+                     const std::string &save_path = "./download") {
     params.save_path = save_path;
     params.ti = std::make_shared<libtorrent::torrent_info>(torrent_file);
     task tk;
@@ -58,11 +52,9 @@ public:
   }
 
   torrent_downloader(const std::vector<std::string> &torrent_files,
-                     const std::string &save_path = "./download")
-  {
+                     const std::string &save_path = "./download") {
     params.save_path = save_path;
-    for (const auto &torrent_file : torrent_files)
-    {
+    for (const auto &torrent_file : torrent_files) {
       params.ti = std::make_shared<libtorrent::torrent_info>(torrent_file);
       task tk;
       tk.params = params;
@@ -76,6 +68,7 @@ public:
 
 private:
   void set_session(lt::session &session);
-  void check_torrent_helper(lt::session &session, lt::torrent_status &st, indicators::ProgressBar &progress_bar);
+  void check_torrent_helper(lt::session &session, lt::torrent_status &st,
+                            indicators::ProgressBar &progress_bar);
   void check_torrent();
 };
