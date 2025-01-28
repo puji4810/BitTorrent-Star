@@ -24,9 +24,9 @@ void torrent_downloader::set_session(lt::session &session) {
   session.apply_settings(settings);
 }
 
-void torrent_downloader::check_torrent_helper(lt::session &session,
-                                              lt::torrent_status &st, indicators::ProgressBar &progress_bar)
-{
+void torrent_downloader::check_torrent_helper(
+    lt::session &session, lt::torrent_status &st, std::size_t bars_index,
+    std::vector<lt::alert *> &alerts) {
   bool torrent_finished = false; // 状态变量，标记是否完成
   while (!torrent_finished) {
     session.post_torrent_updates();
@@ -57,11 +57,9 @@ void torrent_downloader::check_torrent_helper(lt::session &session,
         //   }
         // }
 
-      case lt::torrent_checked_alert::alert_type:
-      {
+      case lt::torrent_checked_alert::alert_type: {
         auto checked_alert = lt::alert_cast<lt::torrent_checked_alert>(alert);
-        if (checked_alert)
-        {
+        if (checked_alert) {
           std::cout << "Torrent checked\n";
         }
         break;
@@ -71,21 +69,21 @@ void torrent_downloader::check_torrent_helper(lt::session &session,
         auto update_alert = lt::alert_cast<lt::state_update_alert>(alert);
         if (update_alert && !update_alert->status.empty()) {
           st = update_alert->status.at(0);
-          progress_bar.set_progress(st.progress * 100);
+          bars[bars_index].set_progress(st.progress * 100);
           double download_rate = st.download_rate / 1024.0;
           std::string speed_str =
               (download_rate > 1024.0)
                   ? std::to_string(download_rate / 1024.0) + "MB/s"
                   : std::to_string(download_rate) + "KB/s";
-          progress_bar.set_option(indicators::option::PostfixText{
+          bars[bars_index].set_option(indicators::option::PostfixText{
               "Downloading... " + std::to_string(int(st.progress * 100)) +
               "% | Speed: " + speed_str});
           if (st.is_finished) {
-            progress_bar.set_option(
+            bars[bars_index].set_option(
                 indicators::option::ForegroundColor{indicators::Color::cyan});
-            progress_bar.set_option(
+            bars[bars_index].set_option(
                 indicators::option::PostfixText{"Download complete!"});
-            progress_bar.mark_as_completed();
+            bars[bars_index].mark_as_completed();
             std::cout << "\nDownload complete!\n";
             torrent_finished = true;
           }
@@ -101,9 +99,21 @@ void torrent_downloader::check_torrent_helper(lt::session &session,
 }
 
 void torrent_downloader::check_torrent() {
-  for (auto &task : tasks) {
+  std::vector<std::thread> threads;
+
+  for (auto &&[index, task] : std::views::enumerate(tasks)) {
     std::cout << "torrent file: " << task.params.ti->name() << std::endl;
-    check_torrent_helper(task.session, task.status, *task.progress_bar);
+    bars.push_back(std::move(task.progress_bar));
+    // check_torrent_helper(task.session, task.status, *task.progress_bar);
+    // task.progress_bar->set_option(
+    //     indicators::option::PrefixText{task.params.ti->name()});
+    threads.emplace_back(std::thread([this, &task, index]() {
+      check_torrent_helper(task.session, task.status, index, task.alerts);
+    }));
+  }
+
+  for (auto &t : threads) {
+    t.join();
   }
 }
 

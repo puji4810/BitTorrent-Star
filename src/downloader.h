@@ -1,4 +1,4 @@
-#include <chrono>
+#include <indicators/dynamic_progress.hpp>
 #include <indicators/progress_bar.hpp>
 #include <iostream>
 #include <libtorrent/add_torrent_params.hpp>
@@ -8,6 +8,7 @@
 #include <libtorrent/session_params.hpp>
 #include <libtorrent/torrent_handle.hpp>
 #include <memory>
+#include <ranges>
 #include <thread>
 #include <vector>
 struct task {
@@ -15,7 +16,7 @@ struct task {
   libtorrent::add_torrent_params params;
   libtorrent::torrent_status status;
   std::unique_ptr<indicators::ProgressBar> progress_bar;
-
+  std::vector<libtorrent::alert *> alerts;
   task() {
     progress_bar = std::make_unique<indicators::ProgressBar>(
         indicators::option::BarWidth{50}, indicators::option::Start{"["},
@@ -38,9 +39,9 @@ struct torrent_downloader {
 public:
   std::vector<task> tasks;
   // libtorrent::session session;
-  std::vector<libtorrent::alert *> alerts;
   libtorrent::add_torrent_params params;
   // indicators::ProgressBar progress_bar;
+  indicators::DynamicProgress<indicators::ProgressBar> bars;
 
   torrent_downloader(const std::string &torrent_file,
                      const std::string &save_path = "./download") {
@@ -69,6 +70,7 @@ public:
 private:
   void set_session(lt::session &session);
   void check_torrent_helper(lt::session &session, lt::torrent_status &st,
-                            indicators::ProgressBar &progress_bar);
+                            std::size_t bars_index,
+                            std::vector<lt::alert *> &alerts);
   void check_torrent();
 };
