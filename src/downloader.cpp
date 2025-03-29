@@ -101,7 +101,17 @@ void torrent_downloader::check_torrent_helper(
 void torrent_downloader::check_torrent() {
   std::vector<std::thread> threads;
 
-  for (auto &&[index, task] : std::views::enumerate(tasks)) {
+  // for (auto &&[index, task] : std::views::enumerate(tasks)) {
+  //   std::cout << "torrent file: " << task.params.ti->name() << std::endl;
+  //   bars.push_back(std::move(task.progress_bar));
+  //   threads.emplace_back(std::thread([this, &task, index]() {
+  //     check_torrent_helper(task.session, task.status, index, task.alerts);
+  //   }));
+  // } // apple clang cant use std::views::enumerate
+
+
+  size_t index = 0;
+  for (auto& task : tasks) {
     std::cout << "torrent file: " << task.params.ti->name() << std::endl;
     bars.push_back(std::move(task.progress_bar));
     // check_torrent_helper(task.session, task.status, *task.progress_bar);
@@ -110,7 +120,9 @@ void torrent_downloader::check_torrent() {
     threads.emplace_back(std::thread([this, &task, index]() {
       check_torrent_helper(task.session, task.status, index, task.alerts);
     }));
+    ++index;  // 增加索引
   }
+
 
   for (auto &t : threads) {
     t.join();
