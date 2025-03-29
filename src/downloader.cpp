@@ -111,7 +111,7 @@ void torrent_downloader::check_torrent() {
     }));
     ++index;  // 增加索引
   }
-#elif
+#else
   for (auto &&[index, task] : std::views::enumerate(tasks)) {
     std::cout << "torrent file: " << task.params.ti->name() << std::endl;
     bars.push_back(std::move(task.progress_bar));
