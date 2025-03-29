@@ -15,7 +15,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          sudo apt-get update
+          git submodule update --init --recursive
           sudo apt-get install -y build-essential libboost-program-options-dev libtorrent-rasterbar-dev
 
       - name: Configure with CMake
