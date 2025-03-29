@@ -1,6 +1,6 @@
 # BitTorrent-Star
 A command-line based torrent downloader
-A lightweight and efficient command-line torrent downloader written in [Programming Language]. This tool allows you to download torrent files directly from the terminal, making it ideal for headless servers or users who prefer a minimalistic approach.
+A lightweight and efficient command-line torrent downloader written in Modern C++(maybe). This tool allows you to download torrent files directly from the terminal, making it ideal for headless servers or users who prefer a minimalistic approach.
 
 ## Features
 
