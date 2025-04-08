@@ -16,7 +16,7 @@ struct initer {
     po::options_description desc("Allowed options");
     desc.add_options()("help", "produce help message")("version,v",
                                                        "print version string")(
-        "save,s", po::value<std::string>()->default_value("./download/"),
+        "save,s", po::value<std::string>()/*->default_value("./download/")*/,
         "saved path")("download,d", po::value<std::vector<std::string>>(),
                       "download file");
 
@@ -34,7 +34,6 @@ struct initer {
     }
     if (vm.count("save")) {
       save_path = vm["save"].as<std::string>();
-      std::cout << "Save file: " << vm["save"].as<std::string>() << "\n";
     }
     if (vm.count("download")) {
       file_paths = vm["download"].as<std::vector<std::string>>();

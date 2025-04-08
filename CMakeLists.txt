@@ -7,6 +7,12 @@ find_package(Boost REQUIRED COMPONENTS program_options)
 find_package(LibtorrentRasterbar REQUIRED)
 find_library(JSONCPP_LIBRARY jsoncpp)
 
+configure_file(
+        ${CMAKE_SOURCE_DIR}/config.json
+        ${CMAKE_BINARY_DIR}/config.json
+        COPYONLY
+)
+
 # 包含 indicators 的头文件
 add_subdirectory(external/indicators)
 include_directories(external/indicators/include)

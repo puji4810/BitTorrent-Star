@@ -28,10 +28,10 @@ struct task {
         indicators::option::FontStyles{
             std::vector<indicators::FontStyle>{indicators::FontStyle::bold}});
   }
-  task(const task &) = delete;            // 禁用拷贝构造函数
-  task(task &&) = default;                // 启用移动构造函数
-  task &operator=(const task &) = delete; // 禁用拷贝赋值运算符
-  task &operator=(task &&) = default;     // 启用移动赋值运算符
+  task(const task &) = delete;
+  task(task &&) = default;
+  task &operator=(const task &) = delete;
+  task &operator=(task &&) = default;
   ~task() = default;
 };
 
