@@ -1,3 +1,7 @@
 {
-  "save_path" : "./download"
+  "save_path" : "./download",
+  "download_urls" : [
+    "https://releases.ubuntu.com/24.10/ubuntu-24.10-desktop-amd64.iso.torrent",
+    "https://releases.ubuntu.com/22.04/ubuntu-22.04.5-desktop-amd64.iso.torrent"
+  ]
 }
