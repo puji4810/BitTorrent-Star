@@ -16,10 +16,12 @@ int main(int argc, char *argv[]) {
         save_path = config_init.save_path;
     }
     std::cout << "Save file: " << save_path << "\n";
-    std::cout << "Download file: " << config_init.file_paths.size() << "\n";
 
-    torrent_downloader td(config_init.file_paths, save_path); // 通过本地torrent文件下载
-    // torrent_downloader td(urls, save_path); // 通过url下载
+    std::vector<std::string> src;
+    src.insert(src.end(), config_init.file_paths.begin(), config_init.file_paths.end());
+    src.insert(src.end(), urls.begin(), urls.end());
+
+    torrent_downloader td(src, save_path);
     td.async_bitorrent_download();
     td.wait();
 }
