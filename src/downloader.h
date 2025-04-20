@@ -47,19 +47,22 @@ struct torrent_downloader {
 public:
     std::vector<task> tasks;
     // libtorrent::session session;
-    libtorrent::add_torrent_params params;
+    // libtorrent::add_torrent_params params;
     // indicators::ProgressBar progress_bar;
     indicators::DynamicProgress<indicators::ProgressBar> bars;
 
     torrent_downloader(const std::string &src,
                        const std::string &save_path = "./download") {
-        params.save_path = save_path;
+        // params.save_path = save_path;
+        libtorrent::add_torrent_params params;
         task tk;
 
         if (is_magnet_uri(src)) {
             params = libtorrent::parse_magnet_uri(src);
+            params.save_path = save_path;
         } else {
             params.ti = std::make_shared<libtorrent::torrent_info>(src);
+            params.save_path = save_path;
         }
         tk.params = params;
         tasks.emplace_back(std::move(tk));
@@ -67,13 +70,16 @@ public:
 
     torrent_downloader(const std::vector<std::string> &src,
                        const std::string &save_path = "./download") {
-        params.save_path = save_path;
+        // params.save_path = save_path;
         for (const auto &s: src) {
+            libtorrent::add_torrent_params params;
             task tk;
             if (is_magnet_uri(s)) {
                 params = libtorrent::parse_magnet_uri(s);
+                params.save_path = save_path;
             } else {
                 params.ti = std::make_shared<libtorrent::torrent_info>(s);
+                params.save_path = save_path;
             }
             tk.params = std::move(params);
             tasks.emplace_back(std::move(tk));
