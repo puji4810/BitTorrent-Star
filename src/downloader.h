@@ -1,3 +1,6 @@
+#ifndef BITTORRENT_DOWNLOADER_H
+#define BITTORRENT_DOWNLOADER_H
+
 #include <indicators/dynamic_progress.hpp>
 #include <indicators/progress_bar.hpp>
 #include <iostream>
@@ -11,6 +14,9 @@
 #include <ranges>
 #include <thread>
 #include <vector>
+#include <fstream>
+#include <fmt/format.h>
+#include "spdlog/spdlog.h"
 
 struct task {
     libtorrent::session session;
@@ -45,10 +51,9 @@ struct task {
 
 struct torrent_downloader {
 public:
-    std::vector<task> tasks;
-    // libtorrent::session session;
-    // libtorrent::add_torrent_params params;
-    // indicators::ProgressBar progress_bar;
+    std::vector<task> tasks{};
+    static std::vector<std::string> trackers;
+
     indicators::DynamicProgress<indicators::ProgressBar> bars;
 
     torrent_downloader(const std::string &src,
@@ -59,9 +64,11 @@ public:
 
         if (is_magnet_uri(src)) {
             params = libtorrent::parse_magnet_uri(src);
+            params.trackers = trackers;
             params.save_path = save_path;
         } else {
             params.ti = std::make_shared<libtorrent::torrent_info>(src);
+            params.trackers = trackers;
             params.save_path = save_path;
         }
         tk.params = params;
@@ -76,9 +83,11 @@ public:
             task tk;
             if (is_magnet_uri(s)) {
                 params = libtorrent::parse_magnet_uri(s);
+                params.trackers = trackers;
                 params.save_path = save_path;
             } else {
                 params.ti = std::make_shared<libtorrent::torrent_info>(s);
+                params.trackers = trackers;
                 params.save_path = save_path;
             }
             tk.params = std::move(params);
@@ -105,3 +114,5 @@ private:
         return str.find("magnet:?xt=urn:btih:") == 0; // 判断是否以 "magnet:?xt=urn:btih:" 开头
     }
 };
+
+#endif

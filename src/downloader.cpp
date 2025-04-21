@@ -1,5 +1,7 @@
 #include "downloader.h"
 
+std::vector<std::string> torrent_downloader::trackers{};
+
 void torrent_downloader::set_session(lt::session &session) {
     lt::settings_pack settings;
     // 调整发送/接收缓冲区
@@ -36,9 +38,7 @@ void torrent_downloader::check_torrent_helper(
                 case lt::torrent_error_alert::alert_type: {
                     auto error_alert = lt::alert_cast<lt::torrent_error_alert>(alert);
                     if (error_alert) {
-                        std::cerr << "Torrent error: " << error_alert->error.message()
-                                << " (" << error_alert->handle.info_hashes()
-                                << ")\n";
+                        spdlog::error("Torrent error: {}", error_alert->error.message());
                     }
                     break;
                 }
@@ -47,9 +47,9 @@ void torrent_downloader::check_torrent_helper(
                 case lt::metadata_failed_alert::alert_type: {
                     auto metadata_alert = lt::alert_cast<lt::metadata_failed_alert>(alert);
                     if (metadata_alert) {
-                        std::cerr << "Failed to retrieve metadata for torrent: "
-                                << metadata_alert->handle.info_hashes()
-                                << ". Error: " << metadata_alert->error.message() << "\n";
+                        spdlog::error("Failed to retrieve metadata for torrent: {}. Error: {}",
+                                      metadata_alert->handle.info_hashes().get_best().to_string(),
+                                      metadata_alert->error.message());
                     }
                     break;
                 }
@@ -58,8 +58,7 @@ void torrent_downloader::check_torrent_helper(
                 case lt::tracker_error_alert::alert_type: {
                     auto tracker_alert = lt::alert_cast<lt::tracker_error_alert>(alert);
                     if (tracker_alert) {
-                        std::cerr << "Tracker error: " << tracker_alert->error.message()
-                                << "\n";
+                        spdlog::error("Tracker error: {}", tracker_alert->error.message());
                     }
                     break;
                 }
@@ -68,8 +67,8 @@ void torrent_downloader::check_torrent_helper(
                 case lt::file_error_alert::alert_type: {
                     auto file_alert = lt::alert_cast<lt::file_error_alert>(alert);
                     if (file_alert) {
-                        std::cerr << "File error: " << file_alert->error.message()
-                                << "\n";
+                        spdlog::error("File error: {}",
+                                      file_alert->error.message());
                     }
                     break;
                 }
@@ -78,7 +77,8 @@ void torrent_downloader::check_torrent_helper(
                 case lt::torrent_checked_alert::alert_type: {
                     auto checked_alert = lt::alert_cast<lt::torrent_checked_alert>(alert);
                     if (checked_alert) {
-                        std::cout << "Torrent checked\n";
+                        spdlog::info("Torrent checked: {}",
+                                     checked_alert->handle.info_hashes().get_best().to_string());
                     }
                     break;
                 }
@@ -145,8 +145,8 @@ void torrent_downloader::check_torrent() {
 
 void torrent_downloader::async_bitorrent_download() {
     for (auto &task: tasks) {
+        // set_session(task.session);
         task.session.async_add_torrent(task.params);
         task.session.post_torrent_updates();
     }
-    return;
 }
