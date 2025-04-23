@@ -19,32 +19,42 @@
 #include "spdlog/spdlog.h"
 
 struct task {
-    libtorrent::session session;
+    std::unique_ptr<libtorrent::session> session;
     libtorrent::add_torrent_params params;
     libtorrent::torrent_status status;
-    std::unique_ptr<indicators::ProgressBar> progress_bar;
     std::vector<libtorrent::alert *> alerts;
+    std::size_t bar_index;
+    bool is_finished = false;
 
     task() {
-        progress_bar = std::make_unique<indicators::ProgressBar>(
-            indicators::option::BarWidth{50}, indicators::option::Start{"["},
-            indicators::option::Fill{"="}, indicators::option::Lead{">"},
-            indicators::option::Remainder{" "}, indicators::option::End{"]"},
-            indicators::option::ForegroundColor{indicators::Color::cyan},
-            indicators::option::ShowElapsedTime{true},
-            indicators::option::ShowRemainingTime{true},
-            indicators::option::FontStyles{
-                std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
-            });
+        session = std::make_unique<libtorrent::session>();
     }
 
     task(const task &) = delete;
 
-    task(task &&) = default;
-
     task &operator=(const task &) = delete;
 
-    task &operator=(task &&) = default;
+    task(task&& other) noexcept
+        : session(std::move(other.session)),
+          params(std::move(other.params)),
+          status(std::move(other.status)),
+          alerts(std::move(other.alerts)),
+          bar_index(other.bar_index),
+          is_finished(other.is_finished)
+    {}
+
+    task& operator=(task&& other) noexcept {
+        if (this != &other) {
+            // 也不要移动 session，或用 swap 替代
+            session = std::move(other.session);
+            params = std::move(other.params);
+            status = std::move(other.status);
+            alerts = std::move(other.alerts);
+            bar_index = other.bar_index;
+            is_finished = other.is_finished;
+        }
+        return *this;
+    }
 
     ~task() = default;
 };
@@ -58,26 +68,23 @@ public:
 
     torrent_downloader(const std::string &src,
                        const std::string &save_path = "./download") {
-        // params.save_path = save_path;
         libtorrent::add_torrent_params params;
         task tk;
 
         if (is_magnet_uri(src)) {
             params = libtorrent::parse_magnet_uri(src);
-            params.trackers = trackers;
-            params.save_path = save_path;
         } else {
             params.ti = std::make_shared<libtorrent::torrent_info>(src);
-            params.trackers = trackers;
-            params.save_path = save_path;
         }
+        params.trackers = trackers;
+        params.save_path = save_path;
         tk.params = params;
+        tk.bar_index = tasks.size();
         tasks.emplace_back(std::move(tk));
     }
 
     torrent_downloader(const std::vector<std::string> &src,
                        const std::string &save_path = "./download") {
-        // params.save_path = save_path;
         for (const auto &s: src) {
             libtorrent::add_torrent_params params;
             task tk;
@@ -91,11 +98,25 @@ public:
                 params.save_path = save_path;
             }
             tk.params = std::move(params);
+            tk.bar_index = tasks.size();
+            bars.push_back(std::make_unique<indicators::ProgressBar>(
+                indicators::option::BarWidth{50}, indicators::option::Start{"["},
+                indicators::option::Fill{"="}, indicators::option::Lead{">"},
+                indicators::option::Remainder{" "}, indicators::option::End{"]"},
+                indicators::option::ForegroundColor{indicators::Color::cyan},
+                indicators::option::ShowElapsedTime{true},
+                indicators::option::ShowRemainingTime{true},
+                indicators::option::FontStyles{
+                    std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
+                }
+            ));
             tasks.emplace_back(std::move(tk));
         }
     }
 
-    void wait() { check_torrent(); }
+    void wait() {
+        check_torrent_polling();
+    }
 
     void async_bitorrent_download();
 
@@ -104,11 +125,9 @@ public:
 private:
     void set_session(lt::session &session);
 
-    void check_torrent_helper(lt::session &session, lt::torrent_status &st,
-                              std::size_t bars_index,
-                              std::vector<lt::alert *> &alerts);
+    void check_torrent_status(task &);
 
-    void check_torrent();
+    void check_torrent_polling();
 
     bool is_magnet_uri(const std::string &str) {
         return str.find("magnet:?xt=urn:btih:") == 0; // 判断是否以 "magnet:?xt=urn:btih:" 开头

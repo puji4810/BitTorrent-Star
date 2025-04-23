@@ -27,7 +27,13 @@ int main(int argc, char *argv[]) {
     src.insert(src.end(), config_init.file_paths.begin(), config_init.file_paths.end());
     src.insert(src.end(), urls.begin(), urls.end());
 
-    torrent_downloader td(src, save_path);
-    td.async_bitorrent_download();
-    td.wait();
+    std::vector<std::thread> download_threads;
+    download_threads.emplace_back([&]() {
+        torrent_downloader td(src, save_path);
+        td.async_bitorrent_download();
+        td.wait();
+    });
+    for (auto &t: download_threads) {
+        t.join();
+    }
 }
