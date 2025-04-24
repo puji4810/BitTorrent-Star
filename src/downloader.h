@@ -18,7 +18,7 @@
 #include <fmt/format.h>
 #include "spdlog/spdlog.h"
 
-struct task {
+struct Task {
     std::unique_ptr<libtorrent::session> session;
     libtorrent::add_torrent_params params;
     libtorrent::torrent_status status;
@@ -26,15 +26,15 @@ struct task {
     std::size_t bar_index;
     bool is_finished = false;
 
-    task() {
+    Task() {
         session = std::make_unique<libtorrent::session>();
     }
 
-    task(const task &) = delete;
+    Task(const Task &) = delete;
 
-    task &operator=(const task &) = delete;
+    Task &operator=(const Task &) = delete;
 
-    task(task&& other) noexcept
+    Task(Task&& other) noexcept
         : session(std::move(other.session)),
           params(std::move(other.params)),
           status(std::move(other.status)),
@@ -43,9 +43,8 @@ struct task {
           is_finished(other.is_finished)
     {}
 
-    task& operator=(task&& other) noexcept {
+    Task& operator=(Task&& other) noexcept {
         if (this != &other) {
-            // 也不要移动 session，或用 swap 替代
             session = std::move(other.session);
             params = std::move(other.params);
             status = std::move(other.status);
@@ -56,20 +55,17 @@ struct task {
         return *this;
     }
 
-    ~task() = default;
+    ~Task() = default;
 };
 
 struct torrent_downloader {
 public:
-    std::vector<task> tasks{};
     static std::vector<std::string> trackers;
-
-    indicators::DynamicProgress<indicators::ProgressBar> bars;
 
     torrent_downloader(const std::string &src,
                        const std::string &save_path = "./download") {
         libtorrent::add_torrent_params params;
-        task tk;
+        Task tk;
 
         if (is_magnet_uri(src)) {
             params = libtorrent::parse_magnet_uri(src);
@@ -87,7 +83,7 @@ public:
                        const std::string &save_path = "./download") {
         for (const auto &s: src) {
             libtorrent::add_torrent_params params;
-            task tk;
+            Task tk;
             if (is_magnet_uri(s)) {
                 params = libtorrent::parse_magnet_uri(s);
                 params.trackers = trackers;
@@ -123,9 +119,12 @@ public:
     int bitorrent_download();
 
 private:
+    std::vector<Task> tasks{};
+    indicators::DynamicProgress<indicators::ProgressBar> bars;
+
     void set_session(lt::session &session);
 
-    void check_torrent_status(task &);
+    void check_torrent_status(Task &);
 
     void check_torrent_polling();
 

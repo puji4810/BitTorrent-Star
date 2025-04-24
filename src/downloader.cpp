@@ -22,7 +22,7 @@ void torrent_downloader::set_session(lt::session &session) {
     session.apply_settings(settings);
 }
 
-void torrent_downloader::check_torrent_status(task &tk) {
+void torrent_downloader::check_torrent_status(Task &tk) {
     lt::session &session = *tk.session;
     lt::torrent_status &st = tk.status;
     std::size_t bars_index = tk.bar_index;
