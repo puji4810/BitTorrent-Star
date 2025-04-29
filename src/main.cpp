@@ -27,13 +27,25 @@ int main(int argc, char *argv[]) {
     src.insert(src.end(), config_init.file_paths.begin(), config_init.file_paths.end());
     src.insert(src.end(), urls.begin(), urls.end());
 
+    const size_t batch_size = 10; // 每 10 个资源一组
     std::vector<std::thread> download_threads;
-    download_threads.emplace_back([&]() {
-        torrent_downloader td(src, save_path);
-        td.async_bitorrent_download();
-        td.wait();
-    });
-    for (auto &t: download_threads) {
-        t.join();
+
+    for (size_t i = 0; i < src.size(); i += batch_size) {
+        auto chunk_view = src | std::views::drop(i) | std::views::take(batch_size);
+        std::vector<std::string> batch(chunk_view.begin(), chunk_view.end());
+        for (const auto &s: batch) {
+            spdlog::info("Download file: {}", s);
+        }
+        download_threads.emplace_back([batch, &save_path]() {
+            torrent_downloader td(batch, save_path);
+            td.async_bitorrent_download();
+            td.wait();
+        });
+    }
+
+    for (auto &t : download_threads) {
+        if (t.joinable()) {
+            t.join();
+        }
     }
 }

@@ -58,9 +58,14 @@ struct Task {
     ~Task() = default;
 };
 
+// struct TaskManager {
+//
+// };
+
 struct torrent_downloader {
 public:
     static std::vector<std::string> trackers;
+    static std::size_t bar_index;
 
     torrent_downloader(const std::string &src,
                        const std::string &save_path = "./download") {
@@ -75,7 +80,18 @@ public:
         params.trackers = trackers;
         params.save_path = save_path;
         tk.params = params;
-        tk.bar_index = tasks.size();
+        tk.bar_index = bar_index++;
+        bars.push_back(std::make_unique<indicators::ProgressBar>(
+                indicators::option::BarWidth{50}, indicators::option::Start{"["},
+                indicators::option::Fill{"="}, indicators::option::Lead{">"},
+                indicators::option::Remainder{" "}, indicators::option::End{"]"},
+                indicators::option::ForegroundColor{indicators::Color::cyan},
+                indicators::option::ShowElapsedTime{true},
+                indicators::option::ShowRemainingTime{true},
+                indicators::option::FontStyles{
+                    std::vector<indicators::FontStyle>{indicators::FontStyle::bold}
+                }
+            ));
         tasks.emplace_back(std::move(tk));
     }
 
@@ -86,15 +102,13 @@ public:
             Task tk;
             if (is_magnet_uri(s)) {
                 params = libtorrent::parse_magnet_uri(s);
-                params.trackers = trackers;
-                params.save_path = save_path;
             } else {
                 params.ti = std::make_shared<libtorrent::torrent_info>(s);
-                params.trackers = trackers;
-                params.save_path = save_path;
             }
+            params.trackers = trackers;
+            params.save_path = save_path;
             tk.params = std::move(params);
-            tk.bar_index = tasks.size();
+            tk.bar_index = bar_index++;
             bars.push_back(std::make_unique<indicators::ProgressBar>(
                 indicators::option::BarWidth{50}, indicators::option::Start{"["},
                 indicators::option::Fill{"="}, indicators::option::Lead{">"},
@@ -119,8 +133,8 @@ public:
     int bitorrent_download();
 
 private:
-    std::vector<Task> tasks{};
-    indicators::DynamicProgress<indicators::ProgressBar> bars;
+    std::vector<Task> tasks;
+    static indicators::DynamicProgress<indicators::ProgressBar> bars;
 
     void set_session(lt::session &session);
 
