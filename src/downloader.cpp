@@ -2,6 +2,10 @@
 
 std::vector<std::string> torrent_downloader::trackers{};
 
+std::size_t torrent_downloader::bar_index = 0;
+
+indicators::DynamicProgress<indicators::ProgressBar> torrent_downloader::bars{};
+
 void torrent_downloader::set_session(lt::session &session) {
     lt::settings_pack settings;
     // 调整发送/接收缓冲区
