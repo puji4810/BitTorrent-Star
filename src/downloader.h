@@ -16,112 +16,36 @@
 #include <vector>
 #include <fstream>
 #include <mutex>
+#include <atomic>
 #include <fmt/format.h>
 #include "spdlog/spdlog.h"
 
-struct Task
-{
-    std::unique_ptr<libtorrent::session> session;
-    libtorrent::add_torrent_params params;
-    libtorrent::torrent_status status;
-    std::vector<libtorrent::alert *> alerts;
-    std::size_t bar_index;
-    bool is_finished = false;
-
-    Task()
-    {
-        session = std::make_unique<libtorrent::session>();
-    }
-
-    Task(const Task &) = delete;
-
-    Task &operator=(const Task &) = delete;
-
-    Task(Task &&other) noexcept
-        : session(std::move(other.session)),
-          params(std::move(other.params)),
-          status(std::move(other.status)),
-          alerts(std::move(other.alerts)),
-          bar_index(other.bar_index),
-          is_finished(other.is_finished)
-    {
-    }
-
-    Task &operator=(Task &&other) noexcept
-    {
-        if (this != &other)
-        {
-            session = std::move(other.session);
-            params = std::move(other.params);
-            status = std::move(other.status);
-            alerts = std::move(other.alerts);
-            bar_index = other.bar_index;
-            is_finished = other.is_finished;
-        }
-        return *this;
-    }
-
-    ~Task() = default;
-};
-
 namespace puji
 {
-    struct Bars
+    // 进度条管理器单例
+    struct ProgressManager
     {
-    public:
-        Bars() = default;
-
-        std::size_t add_bars(std::unique_ptr<indicators::ProgressBar> bar)
+        static ProgressManager &getInstance()
         {
-            bars.emplace_back(std::move(bar));
-            return this->size();
+            static ProgressManager instance;
+            return instance;
         }
 
-        std::size_t size()
+        ProgressManager(const ProgressManager &) = delete;
+        ProgressManager &operator=(const ProgressManager &) = delete;
+        ProgressManager(ProgressManager &&) = delete;
+        ProgressManager &operator=(ProgressManager &&) = delete;
+
+        indicators::ProgressBar &get_progress_bar(std::size_t index)
         {
-            return bars.size();
+            std::lock_guard<std::mutex> lock(mutex_);
+            return progress_bars_[index];
         }
 
-        indicators::ProgressBar &get_bar(std::size_t bar_index)
+        std::size_t add_progress_bar()
         {
-            return *bars.at(bar_index);
-        }
-
-    private:
-        std::vector<std::unique_ptr<indicators::ProgressBar>> bars;
-    };
-
-    static inline Bars &getBars()
-    {
-        static Bars bars;
-        return bars;
-    }
-
-    struct TaskManager
-    {
-        // 需要线程安全的manager
-    public:
-        void add_task(const std::string &src, const std::string &save_path)
-        {
-            std::lock_guard<std::mutex> lock(mutex); // 加锁
-
-            libtorrent::add_torrent_params params;
-            Task tk;
-
-            if (is_magnet_uri(src))
-            {
-                params = libtorrent::parse_magnet_uri(src);
-            }
-            else
-            {
-                params.ti = std::make_shared<libtorrent::torrent_info>(src);
-            }
-            params.trackers = trackers;
-            params.save_path = save_path;
-            tk.params = params;
-
-            // 添加进度条并获取索引
-            tk.bar_index = getBars().add_bars(std::make_unique<indicators::ProgressBar>(
+            std::lock_guard<std::mutex> lock(mutex_);
+            progress_bars_.push_back(std::make_unique<indicators::ProgressBar>(
                 indicators::option::BarWidth{50},
                 indicators::option::Start{"["},
                 indicators::option::Fill{"="},
@@ -133,28 +57,58 @@ namespace puji
                 indicators::option::ShowRemainingTime{true},
                 indicators::option::FontStyles{
                     std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}));
-
-            tasks.emplace_back(std::move(tk));
-        }
-
-        void remove_task()
-        {
-            std::lock_guard<std::mutex> lock(mutex); // 加锁
-            std::erase_if(tasks, [](const auto &task)
-                          { return task.is_finished; });
-        }
-
-        bool empty() const
-        {
-            return tasks.empty();
+            return progress_bar_count_++;
         }
 
     private:
-        std::vector<Task> tasks;
-        indicators::DynamicProgress<indicators::ProgressBar> bars;
-        // std::size_t bar_index = 0;
-        std::vector<std::string> trackers;
-        std::mutex mutex;
+        ProgressManager() = default;
+        ~ProgressManager() = default;
+
+        indicators::DynamicProgress<indicators::ProgressBar> progress_bars_;
+        std::atomic<std::size_t> progress_bar_count_{0};
+        mutable std::mutex mutex_;
+    };
+
+    struct TaskManager
+    {
+    public:
+        struct Task
+        {
+            std::unique_ptr<libtorrent::session> session;
+            libtorrent::add_torrent_params params;
+            libtorrent::torrent_status status;
+            std::vector<libtorrent::alert *> alerts;
+            std::size_t bar_index;
+            std::atomic<bool> is_finished{false};
+
+            Task();
+            Task(const Task &) = delete;
+            Task &operator=(const Task &) = delete;
+            Task(Task &&other) noexcept;
+            Task &operator=(Task &&other) noexcept;
+            ~Task() = default;
+        };
+
+        TaskManager() = default;
+        TaskManager(const TaskManager &) = delete;
+        TaskManager &operator=(const TaskManager &) = delete;
+        TaskManager(TaskManager &&) = delete;
+        TaskManager &operator=(TaskManager &&) = delete;
+
+        static std::vector<std::string> trackers; // 声明为静态成员变量
+
+        void add_task(const std::string &src, const std::string &save_path);
+        void remove_finished_tasks();
+        bool empty() const;
+        std::vector<Task> &get_tasks();
+        void check_torrent_status(Task &task);
+        void check_torrent_polling();
+        void set_session(lt::session &session);
+        void async_bitorrent_download();
+
+    private:
+        std::vector<Task> tasks_;
+        mutable std::mutex mutex_;
 
         bool is_magnet_uri(const std::string &str)
         {
@@ -162,86 +116,44 @@ namespace puji
         }
     };
 
-    static inline TaskManager &getTaskManager()
+    struct TorrentDownloader
     {
-        static TaskManager manager;
-        return manager;
-    }
-}
-
-struct torrent_downloader
-{
-public:
-    static std::vector<std::string> trackers;
-    static std::size_t bar_index;
-
-    explicit torrent_downloader(const std::string &src,
-                                const std::string &save_path = "./download")
-    {
-        add_task(src, save_path);
-    }
-
-    explicit torrent_downloader(const std::vector<std::string> &src,
-                                const std::string &save_path = "./download")
-    {
-        for (const auto &s : src)
+    public:
+        TorrentDownloader(const std::string &src,
+                          const std::string &save_path = "./download")
+            : task_manager_()
         {
-            add_task(s, save_path);
+            task_manager_.add_task(src, save_path);
         }
-    }
 
-    void wait()
-    {
-        check_torrent_polling();
-    }
-
-    void async_bitorrent_download();
-
-    int bitorrent_download();
-
-private:
-    std::vector<Task> tasks;
-    static indicators::DynamicProgress<indicators::ProgressBar> bars;
-
-    void set_session(lt::session &session);
-
-    void check_torrent_status(Task &);
-
-    void check_torrent_polling();
-
-    bool is_magnet_uri(const std::string &str)
-    {
-        return str.find("magnet:?xt=urn:btih:") == 0; // 判断是否以 "magnet:?xt=urn:btih:" 开头
-    }
-
-    void add_task(const std::string &src, const std::string &save_path)
-    {
-        libtorrent::add_torrent_params params;
-        Task tk;
-
-        if (is_magnet_uri(src))
+        TorrentDownloader(const std::vector<std::string> &src,
+                          const std::string &save_path = "./download")
+            : task_manager_()
         {
-            params = libtorrent::parse_magnet_uri(src);
+            for (const auto &s : src)
+            {
+                task_manager_.add_task(s, save_path);
+            }
         }
-        else
+
+        void wait()
         {
-            params.ti = std::make_shared<libtorrent::torrent_info>(src);
+            task_manager_.check_torrent_polling();
         }
-        params.trackers = trackers;
-        params.save_path = save_path;
-        tk.params = params;
-        tk.bar_index = bar_index++;
-        bars.push_back(std::make_unique<indicators::ProgressBar>(
-            indicators::option::BarWidth{50}, indicators::option::Start{"["},
-            indicators::option::Fill{"="}, indicators::option::Lead{">"},
-            indicators::option::Remainder{" "}, indicators::option::End{"]"},
-            indicators::option::ForegroundColor{indicators::Color::cyan},
-            indicators::option::ShowElapsedTime{true},
-            indicators::option::ShowRemainingTime{true},
-            indicators::option::FontStyles{
-                std::vector<indicators::FontStyle>{indicators::FontStyle::bold}}));
-        tasks.emplace_back(std::move(tk));
-    }
-};
+
+        void async_bitorrent_download()
+        {
+            task_manager_.async_bitorrent_download();
+        }
+
+    private:
+        TaskManager task_manager_;
+        bool is_magnet_uri(const std::string &str)
+        {
+            return str.find("magnet:?xt=urn:btih:") == 0;
+        }
+    };
+
+} // namespace puji
 
 #endif

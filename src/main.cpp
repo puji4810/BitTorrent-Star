@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     helper.config_init("config.json");
     std::string save_path = helper.read<std::string>("save_path");
     std::vector<std::string> urls = helper.read<std::vector<std::string>>("download_urls");
-    torrent_downloader::trackers = helper.read<std::vector<std::string>>("trackers");
+    puji::TaskManager::trackers = helper.read<std::vector<std::string>>("trackers");
 
     // cmd config
     configer config_init(argc, argv);
@@ -42,7 +42,7 @@ int main(int argc, char *argv[])
         }
         download_threads.emplace_back([batch, &save_path]()
                                       {
-            torrent_downloader td(batch, save_path);
+            puji::TorrentDownloader td(batch, save_path);
             td.async_bitorrent_download();
             td.wait(); });
     }
