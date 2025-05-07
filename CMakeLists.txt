@@ -12,6 +12,12 @@ find_package(LibtorrentRasterbar REQUIRED)
 find_package(spdlog REQUIRED)
 find_library(JSONCPP_LIBRARY jsoncpp REQUIRED)
 
+# 添加包含路径
+include_directories(${Boost_INCLUDE_DIRS})
+include_directories(${LibtorrentRasterbar_INCLUDE_DIRS})
+include_directories(${spdlog_INCLUDE_DIRS})
+include_directories(${JSONCPP_INCLUDE_DIRS})
+
 configure_file(
         ${CMAKE_SOURCE_DIR}/config.json
         ${CMAKE_BINARY_DIR}/config.json
@@ -19,8 +25,7 @@ configure_file(
 )
 
 # 包含 indicators 的头文件
-add_subdirectory(external/indicators)
-include_directories(external/indicators/include)
+include_directories(${CMAKE_SOURCE_DIR}/external/indicators/include/)
 
 # 设置默认构建类型为 Debug
 if(NOT CMAKE_BUILD_TYPE)
