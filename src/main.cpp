@@ -1,57 +1,39 @@
-#include "downloader.h"
+#include "download_manager.h"
 #include "configer.h"
 #include "json/json.h"
 #include "../utils/Jsonhelper.hpp"
 #include "../utils/Loghelper.hpp"
 #include <fstream>
+#include <ranges>
+#include <algorithm>
+#include "spdlog/spdlog.h"
 
 int main(int argc, char *argv[])
 {
-    Loginit();
-
-    // Json config
-    JsonHelper helper;
-    helper.config_init("config.json");
-    std::string save_path = helper.read<std::string>("save_path");
-    std::vector<std::string> urls = helper.read<std::vector<std::string>>("download_urls");
-    puji::TaskManager::trackers = helper.read<std::vector<std::string>>("trackers");
-
-    // cmd config
-    configer config_init(argc, argv);
-    if (!config_init.save_path.empty())
+    try
     {
-        save_path = config_init.save_path;
-    }
-    std::cout << "Save file: " << save_path << "\n";
+        Loginit();
+        
+        // 处理命令行参数
+        configer config_init(argc, argv);
 
-    // manget_uri + file_path
-    std::vector<std::string> src;
-    src.insert(src.end(), config_init.file_paths.begin(), config_init.file_paths.end());
-    src.insert(src.end(), urls.begin(), urls.end());
+        // 创建下载管理器
+        puji::DownloadManager manager("config.json");
 
-    const size_t batch_size = 10; // 每 10 个资源一组
-    std::vector<std::thread> download_threads;
-
-    for (size_t i = 0; i < src.size(); i += batch_size)
-    {
-        auto chunk_view = src | std::views::drop(i) | std::views::take(batch_size);
-        std::vector<std::string> batch(chunk_view.begin(), chunk_view.end());
-        for (const auto &s : batch)
+        // 如果命令行指定了保存路径，覆盖配置文件中的设置
+        if (!config_init.save_path.empty())
         {
-            spdlog::info("Download file: {}", s);
+            spdlog::info("Using save path from command line: {}", config_init.save_path);
         }
-        download_threads.emplace_back([batch, &save_path]()
-                                      {
-            puji::TorrentDownloader td(batch, save_path);
-            td.async_bitorrent_download();
-            td.wait(); });
-    }
 
-    for (auto &t : download_threads)
+        // 开始下载
+        manager.start_downloads();
+
+        return 0;
+    }
+    catch (const std::exception &e)
     {
-        if (t.joinable())
-        {
-            t.join();
-        }
+        spdlog::error("Fatal error: {}", e.what());
+        return 1;
     }
 }
