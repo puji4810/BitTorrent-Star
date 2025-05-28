@@ -41,7 +41,8 @@ include(FetchContent)
 # FetchContent_MakeAvailable(jsoncpp)
 
 # 添加 libtorrent
-find_package(LibtorrentRasterbar REQUIRED)
+# 使用 CONFIG 模式来避免使用 Find 模块，直接使用 LibtorrentRasterbarConfig.cmake
+find_package(LibtorrentRasterbar CONFIG REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(jsoncpp REQUIRED)
 find_package(Boost REQUIRED COMPONENTS program_options)
@@ -90,3 +91,6 @@ endif()
 install(TARGETS ${PROJECT_NAME}
     RUNTIME DESTINATION bin
 )
+
+# 构建时复制 config.json 到 build 目录
+configure_file(${CMAKE_SOURCE_DIR}/config.json ${CMAKE_BINARY_DIR}/bin/config.json COPYONLY)
