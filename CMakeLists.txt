@@ -50,15 +50,15 @@ find_package(Boost REQUIRED COMPONENTS program_options)
 # 源文件
 set(SOURCES
     src/main.cpp
-    src/downloader.cpp
-    src/download_manager.cpp
+    src/torrent_engine.cpp
+    src/torrent_download_manager.cpp
 )
 
 # 头文件
 set(HEADERS
-    include/downloader.h
-    include/download_manager.h
-    include/configer.h
+    include/torrent_engine.h
+    include/torrent_download_manager.h
+    include/cli_options.h
 )
 
 # 可执行文件

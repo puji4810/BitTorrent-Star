@@ -1,4 +1,4 @@
-#include "downloader.h"
+#include "torrent_engine.h"
 
 namespace puji
 {

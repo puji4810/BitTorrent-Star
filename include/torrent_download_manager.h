@@ -1,7 +1,7 @@
 #ifndef BITTORRENT_DOWNLOAD_MANAGER_H
 #define BITTORRENT_DOWNLOAD_MANAGER_H
 
-#include "downloader.h"
+#include "torrent_engine.h"
 #include "../utils/Jsonhelper.hpp"
 #include "../utils/Loghelper.hpp"
 #include <string>

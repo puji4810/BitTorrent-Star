@@ -1,4 +1,4 @@
-#include "download_manager.h"
+#include "torrent_download_manager.h"
 #include "spdlog/spdlog.h"
 
 namespace puji

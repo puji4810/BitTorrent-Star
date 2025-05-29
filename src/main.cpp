@@ -1,5 +1,5 @@
-#include "download_manager.h"
-#include "configer.h"
+#include "torrent_download_manager.h"
+#include "cli_options.h"
 #include "json/json.h"
 #include "../utils/Jsonhelper.hpp"
 #include "../utils/Loghelper.hpp"
