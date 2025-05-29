@@ -89,9 +89,28 @@ namespace puji
             ~Task() = default;
         };
 
+        // 会话设置结构体
+        struct SessionSettings
+        {
+            int send_buffer_watermark{1 * 1024 * 1024};
+            int send_buffer_low_watermark{16 * 1024};
+            int send_buffer_watermark_factor{10};
+            int connections_limit{100};
+            int active_downloads{10};
+            int active_seeds{10};
+            bool enable_dht{true};
+            int dht_upload_rate_limit{0};
+            std::uint32_t alert_mask{static_cast<std::uint32_t>(libtorrent::alert::all_categories)};
+        };
+
         static std::vector<std::string> trackers; // 声明为静态成员变量
 
+        // 默认构造函数
         TaskManager();
+
+        // 接受会话设置的构造函数
+        explicit TaskManager(const SessionSettings &settings);
+
         ~TaskManager();
         TaskManager(const TaskManager &) = delete;
         TaskManager &operator=(const TaskManager &) = delete;
@@ -110,6 +129,7 @@ namespace puji
         std::unique_ptr<libtorrent::session> session_;
         std::vector<Task> tasks_;
         mutable std::mutex mutex_;
+        SessionSettings settings_; // 存储会话设置
 
         void configure_session();
         bool is_magnet_uri(const std::string &str)

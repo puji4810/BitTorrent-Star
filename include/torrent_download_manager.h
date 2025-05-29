@@ -22,10 +22,11 @@ namespace puji
 	private:
 		void load_config(const std::string &config_path);
 		void add_all_tasks();
+		TaskManager::SessionSettings load_session_settings(const JsonHelper &helper);
 
 		std::string save_path_;
 		std::vector<std::string> download_urls_;
-		TaskManager task_manager_; // 单个 TaskManager 实例
+		std::unique_ptr<TaskManager> task_manager_;
 	};
 
 } // namespace puji

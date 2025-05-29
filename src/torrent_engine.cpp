@@ -35,7 +35,14 @@ namespace puji
     {
         session_ = std::make_unique<libtorrent::session>();
         configure_session();
-        spdlog::info("TaskManager initialized with single session");
+        spdlog::info("TaskManager initialized with default settings");
+    }
+
+    TaskManager::TaskManager(const SessionSettings &settings) : settings_(settings)
+    {
+        session_ = std::make_unique<libtorrent::session>();
+        configure_session();
+        spdlog::info("TaskManager initialized with custom settings");
     }
 
     TaskManager::~TaskManager()
@@ -46,23 +53,28 @@ namespace puji
     void TaskManager::configure_session()
     {
         lt::settings_pack settings;
-        // 调整发送/接收缓冲区
-        settings.set_int(lt::settings_pack::send_buffer_watermark, 1 * 1024 * 1024);
-        settings.set_int(lt::settings_pack::send_buffer_low_watermark, 16 * 1024);
-        settings.set_int(lt::settings_pack::send_buffer_watermark_factor, 10);
+        // 使用存储的设置值
+        settings.set_int(lt::settings_pack::send_buffer_watermark, settings_.send_buffer_watermark);
+        settings.set_int(lt::settings_pack::send_buffer_low_watermark, settings_.send_buffer_low_watermark);
+        settings.set_int(lt::settings_pack::send_buffer_watermark_factor, settings_.send_buffer_watermark_factor);
 
         // 限制连接和种子数量
-        settings.set_int(lt::settings_pack::connections_limit, 100); // 单个session可以支持更多连接
-        settings.set_int(lt::settings_pack::active_downloads, 10);   // 增加活动下载数
-        settings.set_int(lt::settings_pack::active_seeds, 10);       // 增加活动种子数
+        settings.set_int(lt::settings_pack::connections_limit, settings_.connections_limit);
+        settings.set_int(lt::settings_pack::active_downloads, settings_.active_downloads);
+        settings.set_int(lt::settings_pack::active_seeds, settings_.active_seeds);
 
-        settings.set_bool(lt::settings_pack::enable_dht, true);
-        settings.set_int(lt::settings_pack::dht_upload_rate_limit, 0);
+        settings.set_bool(lt::settings_pack::enable_dht, settings_.enable_dht);
+        settings.set_int(lt::settings_pack::dht_upload_rate_limit, settings_.dht_upload_rate_limit);
 
-        settings.set_int(lt::settings_pack::alert_mask, lt::alert::all_categories);
+        settings.set_int(lt::settings_pack::alert_mask, settings_.alert_mask);
 
         session_->apply_settings(settings);
-        spdlog::info("Session configured with optimized settings");
+
+        // 记录使用的设置
+        spdlog::info("Session configured with settings:");
+        spdlog::info("  - connections_limit: {}", settings_.connections_limit);
+        spdlog::info("  - active_downloads: {}", settings_.active_downloads);
+        spdlog::info("  - active_seeds: {}", settings_.active_seeds);
     }
 
     void TaskManager::check_torrent_status(Task &task)
@@ -240,7 +252,6 @@ namespace puji
         {
             if (!task.is_finished.load())
             {
-                // 使用单个 session 添加 torrent，并获取 handle
                 task.handle = session_->add_torrent(task.params);
                 if (task.handle.is_valid())
                 {
@@ -253,7 +264,6 @@ namespace puji
             }
         }
 
-        // 发布状态更新请求
         session_->post_torrent_updates();
     }
 
@@ -290,8 +300,6 @@ namespace puji
 
         // 添加进度条并获取索引
         tk.bar_index = ProgressManager::getInstance().add_progress_bar();
-
-        // 初始化 handle 为无效状态，稍后在 async_bitorrent_download 中设置
 
         tasks_.emplace_back(std::move(tk));
         spdlog::info("Task added successfully");
