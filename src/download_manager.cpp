@@ -11,19 +11,18 @@ namespace puji
 
 	void DownloadManager::start_downloads()
 	{
-		const size_t batch_size = 10;
-		auto batches = create_batches(batch_size);
+		spdlog::info("Starting downloads for {} URLs", download_urls_.size());
 
-		std::vector<std::thread> download_threads;
-		download_threads.reserve(batches.size());
+		// 添加所有任务到单个 TaskManager
+		add_all_tasks();
 
-		for (const auto &batch : batches)
-		{
-			download_threads.emplace_back([this, batch]()
-										  { process_batch(batch); });
-		}
+		// 启动下载
+		task_manager_.async_bitorrent_download();
 
-		wait_for_completion(download_threads);
+		// 等待所有下载完成
+		task_manager_.check_torrent_polling();
+
+		spdlog::info("All downloads completed");
 	}
 
 	void DownloadManager::load_config(const std::string &config_path)
@@ -36,36 +35,15 @@ namespace puji
 		TaskManager::trackers = helper.read<std::vector<std::string>>("trackers");
 	}
 
-	std::vector<std::vector<std::string>> DownloadManager::create_batches(size_t batch_size)
+	void DownloadManager::add_all_tasks()
 	{
-		std::vector<std::vector<std::string>> batches;
-		for (size_t i = 0; i < download_urls_.size(); i += batch_size)
+		spdlog::info("Adding {} tasks to TaskManager", download_urls_.size());
+
+		for (const auto &url : download_urls_)
 		{
-			auto chunk_view = download_urls_ | std::views::drop(i) | std::views::take(batch_size);
-			batches.emplace_back(chunk_view.begin(), chunk_view.end());
+			task_manager_.add_task(url, save_path_);
+			spdlog::info("Added task: {}", url);
 		}
-		return batches;
-	}
-
-	void DownloadManager::process_batch(const std::vector<std::string> &batch)
-	{
-		for (const auto &url : batch)
-		{
-			spdlog::info("Download file: {}", url);
-		}
-
-		TorrentDownloader td(batch, save_path_);
-		td.async_bitorrent_download();
-		td.wait();
-	}
-
-	void DownloadManager::wait_for_completion(std::vector<std::thread> &threads)
-	{
-		std::for_each(threads.begin(), threads.end(), [](auto &t)
-					  {
-        if (t.joinable()) {
-            t.join();
-        } });
 	}
 
 } // namespace puji

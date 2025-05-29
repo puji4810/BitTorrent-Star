@@ -7,13 +7,10 @@ namespace puji
     std::vector<std::string> TaskManager::trackers{};
 
     // 实现Task结构体的方法
-    TaskManager::Task::Task()
-    {
-        session = std::make_unique<libtorrent::session>();
-    }
+    TaskManager::Task::Task() = default;
 
     TaskManager::Task::Task(Task &&other) noexcept
-        : session(std::move(other.session)), params(std::move(other.params)),
+        : handle(std::move(other.handle)), params(std::move(other.params)),
           status(std::move(other.status)), alerts(std::move(other.alerts)),
           bar_index(other.bar_index), is_finished(other.is_finished.load())
     {
@@ -23,7 +20,7 @@ namespace puji
     {
         if (this != &other)
         {
-            session = std::move(other.session);
+            handle = std::move(other.handle);
             params = std::move(other.params);
             status = std::move(other.status);
             alerts = std::move(other.alerts);
@@ -33,7 +30,20 @@ namespace puji
         return *this;
     }
 
-    void TaskManager::set_session(lt::session &session)
+    // TaskManager 构造函数和析构函数
+    TaskManager::TaskManager()
+    {
+        session_ = std::make_unique<libtorrent::session>();
+        configure_session();
+        spdlog::info("TaskManager initialized with single session");
+    }
+
+    TaskManager::~TaskManager()
+    {
+        spdlog::info("TaskManager destructor called");
+    }
+
+    void TaskManager::configure_session()
     {
         lt::settings_pack settings;
         // 调整发送/接收缓冲区
@@ -42,16 +52,17 @@ namespace puji
         settings.set_int(lt::settings_pack::send_buffer_watermark_factor, 10);
 
         // 限制连接和种子数量
-        settings.set_int(lt::settings_pack::connections_limit, 20); // 降低每个任务的连接数
-        settings.set_int(lt::settings_pack::active_downloads, 5);   // 降低活动下载数
-        settings.set_int(lt::settings_pack::active_seeds, 5);       // 降低活动种子数
+        settings.set_int(lt::settings_pack::connections_limit, 100); // 单个session可以支持更多连接
+        settings.set_int(lt::settings_pack::active_downloads, 10);   // 增加活动下载数
+        settings.set_int(lt::settings_pack::active_seeds, 10);       // 增加活动种子数
 
         settings.set_bool(lt::settings_pack::enable_dht, true);
         settings.set_int(lt::settings_pack::dht_upload_rate_limit, 0);
 
         settings.set_int(lt::settings_pack::alert_mask, lt::alert::all_categories);
 
-        session.apply_settings(settings);
+        session_->apply_settings(settings);
+        spdlog::info("Session configured with optimized settings");
     }
 
     void TaskManager::check_torrent_status(Task &task)
@@ -61,14 +72,24 @@ namespace puji
             return;
         }
 
-        lt::session &session = *task.session;
+        // 使用单个 session 而不是每个任务的 session
         lt::torrent_status &st = task.status;
         std::size_t bars_index = task.bar_index;
         std::vector<lt::alert *> &alerts = task.alerts;
 
-        session.post_torrent_updates();
+        // 检查 torrent_handle 是否有效
+        if (!task.handle.is_valid())
+        {
+            spdlog::warn("Invalid torrent handle for task");
+            return;
+        }
+
+        // 获取最新状态
+        st = task.handle.status();
+
+        session_->post_torrent_updates();
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        session.pop_alerts(&alerts);
+        session_->pop_alerts(&alerts);
         for (auto alert : alerts)
         {
             switch (alert->type())
@@ -136,26 +157,31 @@ namespace puji
                 auto update_alert = lt::alert_cast<lt::state_update_alert>(alert);
                 if (update_alert && !update_alert->status.empty())
                 {
-                    st = update_alert->status.at(0);
-                    if (task.params.name != st.name)
+                    // 遍历所有状态更新，找到匹配的任务
+                    for (const auto &status : update_alert->status)
                     {
-                        break;
-                    }
-                    ProgressManager::getInstance().get_progress_bar(bars_index).set_progress(st.progress * 100);
-                    double download_rate = st.download_rate / 1024.0;
-                    std::string speed_str =
-                        (download_rate > 1024.0)
-                            ? std::to_string(download_rate / 1024.0) + "MB/s"
-                            : std::to_string(download_rate) + "KB/s";
-                    ProgressManager::getInstance().get_progress_bar(bars_index).set_option(indicators::option::PostfixText{"Downloading... " + std::to_string(static_cast<int>(st.progress * 100)) + "% | Speed: " + speed_str + " | [" + st.name.substr(0, 40) + "]"});
-                    if (st.is_finished)
-                    {
-                        ProgressManager::getInstance().get_progress_bar(bars_index).set_option(indicators::option::ForegroundColor{indicators::Color::cyan});
-                        ProgressManager::getInstance().get_progress_bar(bars_index).set_option(indicators::option::PostfixText{"Download complete!"});
-                        ProgressManager::getInstance().get_progress_bar(bars_index).mark_as_completed();
-                        task.is_finished.store(true);
-                        spdlog::info("Task completed: {}", st.name);
-                        return;
+                        // 检查这个状态是否对应当前任务
+                        if (task.handle.is_valid() && task.handle.info_hashes() == status.handle.info_hashes())
+                        {
+                            st = status;
+                            ProgressManager::getInstance().get_progress_bar(bars_index).set_progress(st.progress * 100);
+                            double download_rate = st.download_rate / 1024.0;
+                            std::string speed_str =
+                                (download_rate > 1024.0)
+                                    ? std::to_string(download_rate / 1024.0) + "MB/s"
+                                    : std::to_string(download_rate) + "KB/s";
+                            ProgressManager::getInstance().get_progress_bar(bars_index).set_option(indicators::option::PostfixText{"Downloading... " + std::to_string(static_cast<int>(st.progress * 100)) + "% | Speed: " + speed_str + " | [" + st.name.substr(0, 40) + "]"});
+                            if (st.is_finished)
+                            {
+                                ProgressManager::getInstance().get_progress_bar(bars_index).set_option(indicators::option::ForegroundColor{indicators::Color::cyan});
+                                ProgressManager::getInstance().get_progress_bar(bars_index).set_option(indicators::option::PostfixText{"Download complete!"});
+                                ProgressManager::getInstance().get_progress_bar(bars_index).mark_as_completed();
+                                task.is_finished.store(true);
+                                spdlog::info("Task completed: {}", st.name);
+                                return;
+                            }
+                            break; // 找到匹配的状态，跳出内层循环
+                        }
                     }
                 }
                 break;
@@ -209,16 +235,26 @@ namespace puji
     {
         std::lock_guard<std::mutex> lock(mutex_);
         spdlog::info("Starting async download for {} tasks", tasks_.size());
+
         for (auto &task : tasks_)
         {
             if (!task.is_finished.load())
             {
-                // set_session(*task.session);
-                task.session->async_add_torrent(task.params);
-                task.session->post_torrent_updates();
-                spdlog::info("Added torrent: {}", task.params.name);
+                // 使用单个 session 添加 torrent，并获取 handle
+                task.handle = session_->add_torrent(task.params);
+                if (task.handle.is_valid())
+                {
+                    spdlog::info("Added torrent: {}", task.params.name);
+                }
+                else
+                {
+                    spdlog::error("Failed to add torrent: {}", task.params.name);
+                }
             }
         }
+
+        // 发布状态更新请求
+        session_->post_torrent_updates();
     }
 
     void TaskManager::add_task(const std::string &src, const std::string &save_path)
@@ -236,15 +272,27 @@ namespace puji
         }
         else
         {
-            params.ti = std::make_shared<libtorrent::torrent_info>(src);
-            spdlog::info("Loaded torrent file");
+            try
+            {
+                params.ti = std::make_shared<libtorrent::torrent_info>(src);
+                spdlog::info("Loaded torrent file");
+            }
+            catch (const std::exception &e)
+            {
+                spdlog::error("Failed to load torrent file: {}", e.what());
+                return;
+            }
         }
+
         params.trackers = trackers;
         params.save_path = save_path;
         tk.params = params;
 
         // 添加进度条并获取索引
         tk.bar_index = ProgressManager::getInstance().add_progress_bar();
+
+        // 初始化 handle 为无效状态，稍后在 async_bitorrent_download 中设置
+
         tasks_.emplace_back(std::move(tk));
         spdlog::info("Task added successfully");
     }

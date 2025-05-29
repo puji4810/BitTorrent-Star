@@ -74,7 +74,7 @@ namespace puji
     public:
         struct Task
         {
-            std::unique_ptr<libtorrent::session> session;
+            libtorrent::torrent_handle handle;
             libtorrent::add_torrent_params params;
             libtorrent::torrent_status status;
             std::vector<libtorrent::alert *> alerts;
@@ -89,13 +89,14 @@ namespace puji
             ~Task() = default;
         };
 
-        TaskManager() = default;
+        static std::vector<std::string> trackers; // 声明为静态成员变量
+
+        TaskManager();
+        ~TaskManager();
         TaskManager(const TaskManager &) = delete;
         TaskManager &operator=(const TaskManager &) = delete;
         TaskManager(TaskManager &&) = delete;
         TaskManager &operator=(TaskManager &&) = delete;
-
-        static std::vector<std::string> trackers; // 声明为静态成员变量
 
         void add_task(const std::string &src, const std::string &save_path);
         void remove_finished_tasks();
@@ -103,13 +104,14 @@ namespace puji
         std::vector<Task> &get_tasks();
         void check_torrent_status(Task &task);
         void check_torrent_polling();
-        void set_session(lt::session &session);
         void async_bitorrent_download();
 
     private:
+        std::unique_ptr<libtorrent::session> session_;
         std::vector<Task> tasks_;
         mutable std::mutex mutex_;
 
+        void configure_session();
         bool is_magnet_uri(const std::string &str)
         {
             return str.find("magnet:?xt=urn:btih:") == 0;

@@ -21,12 +21,11 @@ namespace puji
 
 	private:
 		void load_config(const std::string &config_path);
-		std::vector<std::vector<std::string>> create_batches(size_t batch_size);
-		void process_batch(const std::vector<std::string> &batch);
-		void wait_for_completion(std::vector<std::thread> &threads);
+		void add_all_tasks();
 
 		std::string save_path_;
 		std::vector<std::string> download_urls_;
+		TaskManager task_manager_; // 单个 TaskManager 实例
 	};
 
 } // namespace puji
