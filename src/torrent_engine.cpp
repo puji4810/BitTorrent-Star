@@ -2,11 +2,8 @@
 
 namespace puji
 {
-
-    // 定义静态成员变量
     std::vector<std::string> TaskManager::trackers{};
 
-    // 实现Task结构体的方法
     TaskManager::Task::Task() = default;
 
     TaskManager::Task::Task(Task &&other) noexcept
@@ -30,7 +27,6 @@ namespace puji
         return *this;
     }
 
-    // TaskManager 构造函数和析构函数
     TaskManager::TaskManager()
     {
         session_ = std::make_unique<libtorrent::session>();
@@ -53,7 +49,6 @@ namespace puji
     void TaskManager::configure_session()
     {
         lt::settings_pack settings;
-        // 使用存储的设置值
         settings.set_int(lt::settings_pack::send_buffer_watermark, settings_.send_buffer_watermark);
         settings.set_int(lt::settings_pack::send_buffer_low_watermark, settings_.send_buffer_low_watermark);
         settings.set_int(lt::settings_pack::send_buffer_watermark_factor, settings_.send_buffer_watermark_factor);
@@ -70,7 +65,6 @@ namespace puji
 
         session_->apply_settings(settings);
 
-        // 记录使用的设置
         spdlog::info("Session configured with settings:");
         spdlog::info("  - connections_limit: {}", settings_.connections_limit);
         spdlog::info("  - active_downloads: {}", settings_.active_downloads);
@@ -84,19 +78,16 @@ namespace puji
             return;
         }
 
-        // 使用单个 session 而不是每个任务的 session
         lt::torrent_status &st = task.status;
         std::size_t bars_index = task.bar_index;
         std::vector<lt::alert *> &alerts = task.alerts;
 
-        // 检查 torrent_handle 是否有效
         if (!task.handle.is_valid())
         {
             spdlog::warn("Invalid torrent handle for task");
             return;
         }
 
-        // 获取最新状态
         st = task.handle.status();
 
         session_->post_torrent_updates();
@@ -106,7 +97,6 @@ namespace puji
         {
             switch (alert->type())
             {
-            // 处理 torrent 错误
             case lt::torrent_error_alert::alert_type:
             {
                 auto error_alert = lt::alert_cast<lt::torrent_error_alert>(alert);
@@ -169,10 +159,8 @@ namespace puji
                 auto update_alert = lt::alert_cast<lt::state_update_alert>(alert);
                 if (update_alert && !update_alert->status.empty())
                 {
-                    // 遍历所有状态更新，找到匹配的任务
                     for (const auto &status : update_alert->status)
                     {
-                        // 检查这个状态是否对应当前任务
                         if (task.handle.is_valid() && task.handle.info_hashes() == status.handle.info_hashes())
                         {
                             st = status;
@@ -192,7 +180,7 @@ namespace puji
                                 spdlog::info("Task completed: {}", st.name);
                                 return;
                             }
-                            break; // 找到匹配的状态，跳出内层循环
+                            break;
                         }
                     }
                 }
@@ -205,12 +193,18 @@ namespace puji
         }
     }
 
-    void TaskManager::check_torrent_polling()
+    void TaskManager::check_torrent_polling(std::atomic<bool> &shutdown_flag)
     {
         try
         {
             while (!tasks_.empty())
             {
+                if (shutdown_flag && shutdown_flag.load())
+                {
+                    spdlog::info("检测到退出信号，中断轮询");
+                    break;
+                }
+
                 std::vector<std::size_t> task_indices;
                 {
                     std::lock_guard<std::mutex> lock(mutex_);
@@ -225,11 +219,24 @@ namespace puji
 
                 for (std::size_t i : task_indices)
                 {
-                    std::lock_guard<std::mutex> lock(mutex_);
-                    if (i < tasks_.size() && !tasks_[i].is_finished.load())
+                    if (shutdown_flag && shutdown_flag.load())
                     {
-                        check_torrent_status(tasks_[i]);
+                        spdlog::info("检测到退出信号，中断任务检查");
+                        break;
                     }
+
+                    {
+                        std::lock_guard<std::mutex> lock(mutex_);
+                        if (i < tasks_.size() && !tasks_[i].is_finished.load())
+                        {
+                            check_torrent_status(tasks_[i]);
+                        }
+                    }
+                }
+
+                if (shutdown_flag && shutdown_flag.load())
+                {
+                    break;
                 }
 
                 remove_finished_tasks();
@@ -310,6 +317,85 @@ namespace puji
         std::lock_guard<std::mutex> lock(mutex_);
         std::erase_if(tasks_, [](const auto &task)
                       { return task.is_finished.load(); });
+    }
+
+    void TaskManager::save_all_resume_data()
+    {
+        spdlog::info("正在保存所有任务的断点续传数据...");
+
+        std::atomic<int> outstanding_resume_data{0};
+
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (auto &task : tasks_)
+            {
+                if (task.handle.is_valid())
+                {
+                    try
+                    {
+                        task.handle.save_resume_data(lt::torrent_handle::only_if_modified);
+                        ++outstanding_resume_data;
+                        spdlog::info("请求保存任务断点续传数据: {}", task.params.name);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        spdlog::error("保存断点续传数据失败: {}", e.what());
+                    }
+                }
+            }
+        }
+
+        while (outstanding_resume_data > 0)
+        {
+            std::vector<lt::alert *> alerts;
+            session_->wait_for_alert(std::chrono::seconds(30));
+            session_->pop_alerts(&alerts);
+
+            for (lt::alert *a : alerts)
+            {
+                if (auto *rd_alert = lt::alert_cast<lt::save_resume_data_alert>(a))
+                {
+                    auto &params = rd_alert->params;
+                    std::string filename;
+
+                    if (!params.name.empty())
+                    {
+                        filename = params.name + ".fastresume";
+                    }
+                    else if (params.ti)
+                    {
+                        filename = params.ti->name() + ".fastresume";
+                    }
+                    else
+                    {
+                        filename = params.info_hashes.get_best().to_string() + ".fastresume";
+                    }
+
+                    std::string full_path = params.save_path + "/" + filename;
+
+                    try
+                    {
+                        std::vector<char> buf = lt::write_resume_data_buf(params);
+                        std::ofstream out(full_path, std::ios_base::binary);
+                        out.write(buf.data(), buf.size());
+                        spdlog::info("断点续传数据已保存至: {}", full_path);
+                    }
+                    catch (const std::exception &e)
+                    {
+                        spdlog::error("写入断点续传文件失败: {}", e.what());
+                    }
+
+                    --outstanding_resume_data;
+                }
+                else if (lt::alert_cast<lt::save_resume_data_failed_alert>(a))
+                {
+                    spdlog::warn("保存断点续传数据失败");
+                    --outstanding_resume_data;
+                }
+            }
+        }
+
+        spdlog::info("所有断点续传数据已保存");
     }
 
     bool TaskManager::empty() const

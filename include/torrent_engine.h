@@ -10,6 +10,7 @@
 #include <libtorrent/session.hpp>
 #include <libtorrent/session_params.hpp>
 #include <libtorrent/torrent_handle.hpp>
+#include <libtorrent/write_resume_data.hpp>
 #include <memory>
 #include <ranges>
 #include <thread>
@@ -22,7 +23,6 @@
 
 namespace puji
 {
-    // 进度条管理器单例
     struct ProgressManager
     {
         static ProgressManager &getInstance()
@@ -122,8 +122,9 @@ namespace puji
         bool empty() const;
         std::vector<Task> &get_tasks();
         void check_torrent_status(Task &task);
-        void check_torrent_polling();
+        void check_torrent_polling(std::atomic<bool> &shutdown_flag);
         void async_bitorrent_download();
+        void save_all_resume_data();
 
     private:
         std::unique_ptr<libtorrent::session> session_;
@@ -156,11 +157,6 @@ namespace puji
             {
                 task_manager_.add_task(s, save_path);
             }
-        }
-
-        void wait()
-        {
-            task_manager_.check_torrent_polling();
         }
 
         void async_bitorrent_download()

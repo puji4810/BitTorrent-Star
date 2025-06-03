@@ -4,6 +4,7 @@
 #include "torrent_engine.h"
 #include "../utils/Jsonhelper.hpp"
 #include "../utils/Loghelper.hpp"
+#include "cli_options.h"
 #include <string>
 #include <vector>
 #include <thread>
@@ -16,8 +17,8 @@ namespace puji
 	class DownloadManager
 	{
 	public:
-		explicit DownloadManager(const std::string &config_path);
-		void start_downloads();
+		DownloadManager(const std::string &config_path, const configer cli_config = configer(0, nullptr));
+		void start_downloads(std::atomic<bool> &shutdown_flag);
 
 	private:
 		void load_config(const std::string &config_path);
@@ -25,7 +26,7 @@ namespace puji
 		TaskManager::SessionSettings load_session_settings(const JsonHelper &helper);
 
 		std::string save_path_;
-		std::vector<std::string> download_urls_;
+		std::vector<std::string> resources_;
 		std::unique_ptr<TaskManager> task_manager_;
 	};
 

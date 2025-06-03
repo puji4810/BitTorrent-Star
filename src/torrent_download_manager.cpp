@@ -4,20 +4,44 @@
 namespace puji
 {
 
-	DownloadManager::DownloadManager(const std::string &config_path)
+	DownloadManager::DownloadManager(const std::string &config_path, const configer cli_config)
+		: save_path_(""), resources_(), task_manager_(nullptr)
 	{
 		load_config(config_path);
+
+		if (!cli_config.save_path.empty())
+		{
+			save_path_ = cli_config.save_path;
+			spdlog::info("Using save path from command line: {}", save_path_);
+		}
+
+		if (!cli_config.resource.empty())
+		{
+			resources_ = cli_config.resource;
+			spdlog::info("Using download source from command line");
+		}
+		else
+		{
+			spdlog::info("No download source provided in command line, will load from config file");
+		}
 	}
 
-	void DownloadManager::start_downloads()
+	void DownloadManager::start_downloads(std::atomic<bool> &shutdown_flag)
 	{
-		spdlog::info("Starting downloads for {} URLs", download_urls_.size());
+		spdlog::info("Starting downloads for {} URLs", resources_.size());
 
 		add_all_tasks();
 		task_manager_->async_bitorrent_download();
-		task_manager_->check_torrent_polling();
 
-		spdlog::info("All downloads completed");
+		task_manager_->check_torrent_polling(shutdown_flag);
+
+		if (shutdown_flag && shutdown_flag.load())
+		{
+			spdlog::info("正在保存断点续传数据...");
+			task_manager_->save_all_resume_data();
+		}
+
+		spdlog::info("All downloads completed or interrupted");
 	}
 
 	TaskManager::SessionSettings DownloadManager::load_session_settings(const JsonHelper &helper)
@@ -26,7 +50,6 @@ namespace puji
 
 		if (helper.is_json_member(helper.get_config(), "session_settings"))
 		{
-			// 从配置文件中读取设置
 			settings.send_buffer_watermark = helper.read<int>("session_settings.send_buffer_watermark");
 			settings.send_buffer_low_watermark = helper.read<int>("session_settings.send_buffer_low_watermark");
 			settings.send_buffer_watermark_factor = helper.read<int>("session_settings.send_buffer_watermark_factor");
@@ -35,13 +58,7 @@ namespace puji
 			settings.active_seeds = helper.read<int>("session_settings.active_seeds");
 			settings.enable_dht = helper.read<bool>("session_settings.enable_dht");
 			settings.dht_upload_rate_limit = helper.read<int>("session_settings.dht_upload_rate_limit");
-
-			Json::Value alert_mask_value = helper.get_nested_value("session_settings.alert_mask");
-			spdlog::info("Raw alert_mask value: {}", alert_mask_value.asString());
-			spdlog::info("alert_mask as asUInt(): {}", alert_mask_value.asUInt());
-
 			settings.alert_mask = helper.read<std::uint32_t>("session_settings.alert_mask");
-			spdlog::info("Loaded alert_mask as uint32_t: {}", settings.alert_mask);
 
 			spdlog::info("Loaded session settings from config.json");
 		}
@@ -59,10 +76,9 @@ namespace puji
 		helper.config_init(config_path);
 
 		save_path_ = helper.read<std::string>("save_path");
-		download_urls_ = helper.read<std::vector<std::string>>("download_urls");
+		resources_ = helper.read<std::vector<std::string>>("resources");
 		TaskManager::trackers = helper.read<std::vector<std::string>>("trackers");
 
-		// 加载会话设置并初始化 TaskManager
 		TaskManager::SessionSettings settings = load_session_settings(helper);
 		task_manager_ = std::make_unique<TaskManager>(settings);
 
@@ -71,9 +87,9 @@ namespace puji
 
 	void DownloadManager::add_all_tasks()
 	{
-		spdlog::info("Adding {} tasks to TaskManager", download_urls_.size());
+		spdlog::info("Adding {} tasks to TaskManager", resources_.size());
 
-		for (const auto &url : download_urls_)
+		for (const auto &url : resources_)
 		{
 			task_manager_->add_task(url, save_path_);
 			spdlog::info("Added task: {}", url);

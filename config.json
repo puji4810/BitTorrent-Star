@@ -1,6 +1,6 @@
 {
   "save_path" : "./download",
-  "download_urls" : [
+  "resources" : [
     "magnet:?xt=urn:btih:2e8e44068b254814ea1a7d4969a9af1d78e0f51f&dn=ubuntu-22.04.5-desktop-amd64.iso",
     "magnet:?xt=urn:btih:611f70899d4e1d6a9c39cfc925f103dfef630328&dn=ubuntu-24.04.2-desktop-amd64.iso",
     "magnet:?xt=urn:btih:8a19577fb5f690970ca43a57ff1011ae202244b8&dn=ubuntu-25.04-desktop-amd64.iso"
