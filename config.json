@@ -13,7 +13,7 @@
     "active_downloads": 10,
     "active_seeds": 10,
     "enable_dht": true,
-    "dht_upload_rate_limit": 0,
+    "dht_upload_rate_limit": 8000,
     "alert_mask": 2147483647
   },
   "trackers": [
