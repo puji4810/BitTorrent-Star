@@ -19,6 +19,7 @@ inline void Loginit()
         file_logger->set_pattern("[%Y-%m-%d %H:%M:%S] [%l] %v");
         spdlog::set_default_logger(file_logger);
         spdlog::set_level(spdlog::level::info);
+        spdlog::set_level(spdlog::level::debug);
     }
     catch (const spdlog::spdlog_ex &ex)
     {

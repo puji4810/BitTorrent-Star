@@ -282,27 +282,31 @@ namespace puji
         libtorrent::add_torrent_params params;
         Task tk;
 
-        if (is_magnet_uri(src))
+        bool has_resume_data = try_load_resume_data(save_path, src, params);
+        if (!has_resume_data)
         {
-            params = libtorrent::parse_magnet_uri(src);
-            spdlog::info("Parsed magnet URI");
-        }
-        else
-        {
-            try
+            if (is_magnet_uri(src))
             {
-                params.ti = std::make_shared<libtorrent::torrent_info>(src);
-                spdlog::info("Loaded torrent file");
+                params = libtorrent::parse_magnet_uri(src);
+                spdlog::info("Parsed magnet URI");
             }
-            catch (const std::exception &e)
+            else
             {
-                spdlog::error("Failed to load torrent file: {}", e.what());
-                return;
+                try
+                {
+                    params.ti = std::make_shared<libtorrent::torrent_info>(src);
+                    spdlog::info("Loaded torrent file");
+                }
+                catch (const std::exception &e)
+                {
+                    spdlog::error("Failed to load torrent file: {}", e.what());
+                    return;
+                }
             }
+            params.trackers = trackers;
+            params.save_path = save_path;
         }
-
-        params.trackers = trackers;
-        params.save_path = save_path;
+        
         tk.params = params;
 
         // 添加进度条并获取索引
@@ -396,6 +400,66 @@ namespace puji
         }
 
         spdlog::info("所有断点续传数据已保存");
+    }
+
+    bool TaskManager::try_load_resume_data(const std::string& save_path, const std::string &src, lt::add_torrent_params &params)
+    {
+        try
+        {
+            spdlog::debug("尝试加载断点续传数据...");
+            std::string resume_file_name;
+
+            if (src.substr(0, 7) == "magnet:")
+            {
+                lt::info_hash_t info_hash;
+                lt::error_code ec;
+                lt::parse_magnet_uri(src, params, ec);
+                if (ec)
+                {
+                    spdlog::error("解析磁力链接失败: {}", ec.message());
+                    return false;
+                }
+                resume_file_name = params.name + ".fastresume";
+            }
+            else
+            {
+                lt::torrent_info ti(src);
+                resume_file_name = ti.name() + ".fastresume";
+            }
+
+            std::string resume_path = save_path + "/" + resume_file_name;
+
+            spdlog::debug("尝试加载断点续传数据: {}", resume_path);
+
+            std::ifstream resume_file(resume_path, std::ios_base::binary);
+            if (!resume_file.is_open())
+            {
+                // 文件不存在，不使用断点续传
+                spdlog::debug("未找到断点续传数据: {}", resume_path);
+                return false;
+            }
+
+            std::stringstream buffer;
+            buffer << resume_file.rdbuf();
+            std::string resume_data_str = buffer.str();
+
+            // 解析 resume data
+            lt::error_code ec;
+            params = lt::read_resume_data(resume_data_str, ec);
+            if (ec)
+            {
+                spdlog::error("读取断点续传数据失败: {}", ec.message());
+                return false;
+            }
+
+            spdlog::info("成功加载断点续传数据: {}", resume_path);
+            return true;
+        }
+        catch (const std::exception &e)
+        {
+            spdlog::error("加载断点续传数据异常: {}", e.what());
+            return false;
+        }
     }
 
     bool TaskManager::empty() const

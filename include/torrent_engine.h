@@ -11,6 +11,7 @@
 #include <libtorrent/session_params.hpp>
 #include <libtorrent/torrent_handle.hpp>
 #include <libtorrent/write_resume_data.hpp>
+#include <libtorrent/read_resume_data.hpp>
 #include <memory>
 #include <ranges>
 #include <thread>
@@ -21,7 +22,7 @@
 #include <fmt/format.h>
 #include "spdlog/spdlog.h"
 
-namespace puji
+    namespace puji
 {
     struct ProgressManager
     {
@@ -125,6 +126,7 @@ namespace puji
         void check_torrent_polling(std::atomic<bool> &shutdown_flag);
         void async_bitorrent_download();
         void save_all_resume_data();
+        bool try_load_resume_data(const std::string& save_path, const std::string &src, lt::add_torrent_params &params);
 
     private:
         std::unique_ptr<libtorrent::session> session_;
