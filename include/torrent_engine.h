@@ -22,7 +22,7 @@
 #include <fmt/format.h>
 #include "spdlog/spdlog.h"
 
-    namespace puji
+namespace puji
 {
     struct ProgressManager
     {
@@ -100,7 +100,7 @@
             int active_downloads{10};
             int active_seeds{10};
             bool enable_dht{true};
-            int dht_upload_rate_limit{0};
+            int dht_upload_rate_limit{8000};
             std::uint32_t alert_mask{static_cast<std::uint32_t>(libtorrent::alert::all_categories)};
         };
 
@@ -126,7 +126,7 @@
         void check_torrent_polling(std::atomic<bool> &shutdown_flag);
         void async_bitorrent_download();
         void save_all_resume_data();
-        bool try_load_resume_data(const std::string& save_path, const std::string &src, lt::add_torrent_params &params);
+        bool try_load_resume_data(const std::string &save_path, const std::string &src, lt::add_torrent_params &params);
 
     private:
         std::unique_ptr<libtorrent::session> session_;

@@ -1,7 +1,3 @@
-//
-// Created by 刘智禹 on 25-4-17.
-//
-
 #ifndef JSONHELPER_H
 #define JSONHELPER_H
 #include "json/json.h"
