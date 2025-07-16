@@ -29,7 +29,6 @@ namespace puji
 	void DownloadManager::start_downloads(std::atomic<bool> &shutdown_flag)
 	{
 		spdlog::info("Starting downloads for {} URLs", resources_.size());
-
 		add_all_tasks();
 		task_manager_->async_bitorrent_download();
 

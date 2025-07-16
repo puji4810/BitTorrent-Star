@@ -42,9 +42,10 @@ include(FetchContent)
 
 # 添加 libtorrent
 # 使用 CONFIG 模式来避免使用 Find 模块，直接使用 LibtorrentRasterbarConfig.cmake
+find_package(PkgConfig REQUIRED)
 find_package(LibtorrentRasterbar CONFIG REQUIRED)
 find_package(spdlog REQUIRED)
-find_package(jsoncpp REQUIRED)
+pkg_check_modules(JSONCPP REQUIRED jsoncpp)
 find_package(Boost REQUIRED COMPONENTS program_options)
 
 # 源文件
@@ -76,7 +77,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     spdlog::spdlog
     LibtorrentRasterbar::torrent-rasterbar
-    jsoncpp_lib
+        ${JSONCPP_LIBRARIES}
     Boost::program_options
 )
 
